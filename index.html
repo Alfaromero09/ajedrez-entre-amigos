@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ajedrez entre Amigos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<style>
+:root {
+  --fondo: #1C130C;
+  --panel: #2A1C13;
+  --panel-2: #33241A;
+  --linea: rgba(233, 220, 195, 0.10);
+  --texto: #F3EADA;
+  --suave: #BFAB8F;
+  --laton: #CDA54E;
+  --laton-claro: #E3C77E;
+  --tinta: #2A1C0C;
+  --casilla-clara: #E9DCC3;
+  --casilla-oscura: #8A5E3C;
+  --marca-clara: #E3C77E;
+  --marca-oscura: #B28A3E;
+  --sombra-1: 0 1px 2px rgba(10, 6, 3, 0.30), 0 10px 28px rgba(10, 6, 3, 0.28), 0 28px 56px rgba(10, 6, 3, 0.16);
+  --sombra-2: 0 2px 4px rgba(10, 6, 3, 0.40), 0 20px 48px rgba(10, 6, 3, 0.45), 0 48px 96px rgba(10, 6, 3, 0.25);
+  --resorte: cubic-bezier(0.16, 1, 0.3, 1);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--texto);
+  font-family: "Hanken Grotesk", system-ui, sans-serif;
+  line-height: 1.6;
+  background:
+    radial-gradient(1000px 600px at 30% 40%, rgba(205, 165, 78, 0.10), transparent 62%),
+    radial-gradient(800px 500px at 100% 0%, rgba(140, 94, 60, 0.18), transparent 60%),
+    var(--fondo);
+}
+h1, h2 { font-family: "Fraunces", serif; font-weight: 500; letter-spacing: -0.03em; margin: 0; }
+.envoltura { max-width: 1240px; margin: 0 auto; padding: 20px 32px 64px; }
+header { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--linea); margin-bottom: 32px; }
+header a { display: flex; align-items: center; gap: 12px; color: var(--texto); text-decoration: none; }
+header span { font-family: "Fraunces", serif; font-size: 22px; letter-spacing: -0.02em; }
+button { font-family: inherit; cursor: pointer; transition: transform 180ms var(--resorte); }
+button:hover { transform: translateY(-1px); }
+button:active { transform: scale(0.97); }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--laton-claro); outline-offset: 3px; }
+.primario { height: 48px; padding: 0 24px; border: 0; border-radius: 12px; background: var(--laton); color: var(--tinta); font-size: 16px; font-weight: 600; box-shadow: 0 1px 2px rgba(10,6,3,0.4), 0 8px 20px rgba(205,165,78,0.22); }
+.secundario { height: 44px; padding: 0 18px; border: 1px solid rgba(233,220,195,0.18); border-radius: 10px; background: transparent; color: var(--texto); font-size: 15px; }
+.secundario:hover { background-color: #3A281C; }
+.oculto { display: none !important; }
+
+#inicio { max-width: 640px; padding: 48px 0; display: flex; flex-direction: column; gap: 24px; }
+#inicio h1 { font-size: 56px; line-height: 1.05; }
+#inicio p { margin: 0; font-size: 18px; color: var(--suave); }
+
+#partida { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+.zona-tablero { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.jugador { width: 100%; max-width: 600px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.jugador strong { font-family: "Fraunces", serif; font-weight: 500; font-size: 20px; }
+.jugador small { display: block; color: var(--suave); font-size: 13px; }
+.jugador .turno { padding: 6px 12px; border-radius: 8px; background: var(--panel); color: var(--suave); font-size: 14px; }
+.jugador .turno.activo { background: var(--laton); color: var(--tinta); font-weight: 600; }
+
+.escena { width: 100%; max-width: 600px; perspective: 1100px; perspective-origin: 50% 0%; padding-top: 12px; }
+.marco { background: #4A2F1C; padding: 12px; border-radius: 14px; transform-origin: 50% 100%; transform-style: preserve-3d; box-shadow: var(--sombra-2); transition: transform 200ms var(--resorte); }
+.tablero { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); aspect-ratio: 1 / 1; transform-style: preserve-3d; }
+.casilla { position: relative; border: 0; padding: 0; transform-style: preserve-3d; cursor: default; }
+.casilla:hover, .casilla:active { transform: none; }
+.casilla.clara { background: var(--casilla-clara); }
+.casilla.oscura { background: var(--casilla-oscura); }
+.casilla.ultima.clara { background: var(--marca-clara); }
+.casilla.ultima.oscura { background: var(--marca-oscura); }
+.casilla.elegida { box-shadow: inset 0 0 0 3px var(--laton-claro); }
+.casilla.jugable { cursor: pointer; }
+.casilla.destino::after { content: ""; position: absolute; left: 38%; top: 38%; width: 24%; height: 24%; border-radius: 50%; background: rgba(42, 28, 12, 0.35); }
+.casilla.destino.ocupada::after { left: 6%; top: 6%; width: 88%; height: 88%; background: transparent; border: 4px solid rgba(42, 28, 12, 0.35); box-sizing: border-box; }
+.pieza { position: absolute; left: 10%; width: 80%; bottom: 8%; transform-origin: 50% 100%; pointer-events: none; transition: transform 200ms var(--resorte); }
+.pieza svg { display: block; width: 100%; height: auto; }
+
+.barra-vista { width: 100%; max-width: 600px; display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--linea); }
+.barra-vista label { color: var(--suave); font-size: 14px; }
+.barra-vista input { flex: 1; accent-color: var(--laton); }
+.barra-vista output { min-width: 36px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.lateral { flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.panel { background: var(--panel); border: 1px solid var(--linea); border-radius: 18px; padding: 20px; box-shadow: var(--sombra-1); display: flex; flex-direction: column; gap: 12px; }
+.panel h2 { font-size: 22px; }
+#estado { margin: 0; font-size: 17px; }
+#jugadas { list-style: none; margin: 0; padding: 0; font-variant-numeric: tabular-nums; max-height: 320px; overflow-y: auto; }
+#jugadas li { display: grid; grid-template-columns: 36px repeat(2, minmax(0, 1fr)); gap: 8px; padding: 3px 0; }
+#jugadas li span:first-child { color: #8F7C63; }
+.vacio { color: var(--suave); margin: 0; }
+
+#aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 12px 20px; border-radius: 12px; background: #3A281C; border: 1px solid rgba(227,199,126,0.32); box-shadow: var(--sombra-2); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="envoltura">
+  <header>
+    <a href="./">
+      <svg viewBox="0 0 40 50" width="24" height="30" aria-hidden="true"><path fill="#CDA54E" d="M12 42 C13 34 16 30 15 26 C12 26 9 24 10 21 C12 17 16 14 18 9 L20 4 L22 8 C28 10 31 18 30 28 C29 34 28 38 28 42 Z M10 42 h20 l1 3 h-22z M8 45 h24 v3 h-24z"/></svg>
+      <span>Ajedrez entre Amigos</span>
+    </a>
+  </header>
+
+  <main>
+    <section id="inicio" class="oculto">
+      <h1>Arma una partida y manda el link</h1>
+      <p>Quien abra el link se sienta con las negras y empiezan a jugar en tiempo real.</p>
+      <div><button id="crear" class="primario">Crear partida</button></div>
+    </section>
+
+    <section id="partida" class="oculto">
+      <div class="zona-tablero">
+        <div class="jugador" id="arriba"></div>
+        <div class="escena"><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div></div>
+        <div class="jugador" id="abajo"></div>
+        <div class="barra-vista">
+          <label for="angulo">Ángulo del tablero</label>
+          <input id="angulo" type="range" min="0" max="75" step="1" value="30">
+          <output id="angulo-valor" for="angulo">30°</output>
+        </div>
+      </div>
+      <aside class="lateral">
+        <div class="panel">
+          <p id="estado">Cargando partida…</p>
+          <button id="copiar" class="secundario oculto">Copiar link de invitación</button>
+          <button id="unirse" class="primario oculto">Unirme con las negras</button>
+        </div>
+        <div class="panel">
+          <h2>Jugadas</h2>
+          <ol id="jugadas"></ol>
+        </div>
+      </aside>
+    </section>
+  </main>
+</div>
+<div id="aviso" role="status" class="oculto"></div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
