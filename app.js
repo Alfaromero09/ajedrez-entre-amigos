@@ -64,8 +64,9 @@ async function abrirPartida(id) {
   if (canal) sb.removeChannel(canal);
   canal = sb
     .channel(`partida-${id}`)
+    .on("broadcast", { event: "jugada" }, ({ payload }) => aplicarRemota(payload))
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "partidas", filter: `id=eq.${id}` }, (cambio) => {
-      if (cambio.new.version >= partida.version) {
+      if (cambio.new.version > partida.version || (cambio.new.version === partida.version && !partida.optimista)) {
         partida = cambio.new;
         elegida = null;
         destinos = [];
@@ -153,7 +154,7 @@ function dibujar() {
   // Tablero
   const tablero = $("tablero");
   tablero.innerHTML = "";
-  const puedoMover = partida.estado === "jugando" && color === turno && !enviando;
+  const puedoMover = partida.estado === "jugando" && color === turno && !enviando && !partida.optimista;
   for (let fila = 0; fila < 8; fila++) {
     for (let col = 0; col < 8; col++) {
       const f = volteado ? 7 - col : col;
@@ -209,13 +210,54 @@ function tocar(casilla, juego, puedoMover, color) {
   dibujar();
 }
 
-async function mover(desde, hacia) {
-  enviando = true;
+// Aplica una jugada localmente sin esperar al servidor.
+function aplicarLocal(desde, hacia) {
+  const juego = new Chess(partida.fen);
+  let mov;
+  try {
+    mov = juego.move({ from: desde, to: hacia, promotion: "q" });
+  } catch {
+    return null;
+  }
+  const estado = juego.isGameOver() ? "terminada" : partida.estado;
+  let resultado = partida.resultado;
+  if (juego.isCheckmate()) resultado = juego.turn() === "w" ? "0-1" : "1-0";
+  else if (juego.isGameOver()) resultado = "½-½";
+  return {
+    ...partida,
+    fen: juego.fen(),
+    jugadas: [...partida.jugadas, { desde: mov.from, hacia: mov.to, san: mov.san }],
+    estado,
+    resultado,
+    optimista: true,
+  };
+}
+
+// Jugada que llega al instante desde el navegador del rival.
+function aplicarRemota(datos) {
+  if (!partida || partida.optimista || datos.version !== partida.version) return;
+  const nueva = aplicarLocal(datos.desde, datos.hacia);
+  if (!nueva) return;
+  partida = nueva;
   elegida = null;
   destinos = [];
   dibujar();
+}
+
+async function mover(desde, hacia) {
+  const previa = partida;
+  const nueva = aplicarLocal(desde, hacia);
+  if (!nueva) return;
+  partida = nueva;
+  elegida = null;
+  destinos = [];
+  enviando = true;
+  dibujar();
+
+  if (canal) canal.send({ type: "broadcast", event: "jugada", payload: { version: previa.version, desde, hacia } });
+
   const { data, error } = await sb.functions.invoke("jugada", {
-    body: { partida: partida.id, desde, hacia, promocion: "q" },
+    body: { partida: previa.id, desde, hacia, promocion: "q" },
   });
   enviando = false;
   if (error) {
@@ -225,8 +267,10 @@ async function mover(desde, hacia) {
       if (cuerpo?.error) mensaje = cuerpo.error;
     } catch { /* sin detalle */ }
     avisar(mensaje);
-  } else if (data?.partida && data.partida.version >= partida.version) {
-    partida = data.partida;
+    const { data: fresca } = await sb.from("partidas").select("*").eq("id", previa.id).single();
+    partida = fresca || previa;
+  } else if (data?.partida && data.partida.version > previa.version) {
+    if (partida.optimista || data.partida.version >= partida.version) partida = data.partida;
   }
   dibujar();
 }
