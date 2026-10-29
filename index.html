@@ -94,6 +94,34 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 #jugadas li span:first-child { color: #8F7C63; }
 .vacio { color: var(--suave); margin: 0; }
 
+.cabecera-derecha { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.cabecera-derecha span { font-family: inherit; font-size: 15px; color: var(--suave); letter-spacing: 0; }
+
+#acceso { display: flex; justify-content: center; padding: 32px 0; }
+.tarjeta { width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--linea); border-radius: 20px; padding: 32px; box-shadow: var(--sombra-2); display: flex; flex-direction: column; gap: 20px; }
+.tarjeta h1 { font-size: 36px; line-height: 1.1; }
+.tarjeta p { margin: 0; color: var(--suave); }
+form { display: flex; flex-direction: column; gap: 16px; }
+.campo { display: flex; flex-direction: column; gap: 6px; }
+.campo label { font-size: 14px; color: var(--suave); }
+.campo input { height: 46px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); font: inherit; font-size: 16px; }
+.enlace { background: none; border: 0; padding: 4px 0; color: var(--laton-claro); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; align-self: flex-start; }
+
+.tiempos { display: flex; flex-wrap: wrap; gap: 8px; }
+.tiempos button { height: 44px; min-width: 72px; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.18); background: transparent; color: var(--suave); font-size: 15px; }
+.tiempos button[aria-pressed="true"] { background: #4A3221; color: var(--texto); border-color: var(--laton); }
+
+.reloj { padding: 6px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--linea); color: var(--suave); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.reloj.activo { background: var(--laton); color: var(--tinta); border-color: transparent; box-shadow: 0 8px 24px rgba(205,165,78,0.28); }
+.reloj.poco.activo { background: #C9603F; color: #FFF4EC; }
+.peligro { color: #E8A28C; }
+
+#coronar { position: fixed; inset: 0; background: rgba(15, 9, 5, 0.6); display: flex; align-items: center; justify-content: center; padding: 24px; }
+#coronar .tarjeta { max-width: 360px; }
+.opciones-coronar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.opciones-coronar button { aspect-ratio: 1 / 1; border-radius: 12px; border: 1px solid var(--linea); background: var(--casilla-clara); padding: 8px; }
+.opciones-coronar svg { width: 100%; height: auto; display: block; }
+
 #aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 12px 20px; border-radius: 12px; background: #3A281C; border: 1px solid rgba(227,199,126,0.32); box-shadow: var(--sombra-2); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -105,12 +133,51 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
       <svg viewBox="0 0 40 50" width="24" height="30" aria-hidden="true"><path fill="#CDA54E" d="M12 42 C13 34 16 30 15 26 C12 26 9 24 10 21 C12 17 16 14 18 9 L20 4 L22 8 C28 10 31 18 30 28 C29 34 28 38 28 42 Z M10 42 h20 l1 3 h-22z M8 45 h24 v3 h-24z"/></svg>
       <span>Ajedrez entre Amigos</span>
     </a>
+    <div class="cabecera-derecha oculto" id="cabecera-usuario">
+      <span id="mi-nombre"></span>
+      <button id="salir" class="secundario">Salir</button>
+    </div>
   </header>
 
   <main>
+    <section id="acceso" class="oculto">
+      <div class="tarjeta">
+        <div id="bloque-entrar">
+          <form id="form-entrar">
+            <h1>Bienvenido al club</h1>
+            <div class="campo"><label for="e-correo">Correo</label><input id="e-correo" type="email" autocomplete="email" required></div>
+            <div class="campo"><label for="e-clave">Contraseña</label><input id="e-clave" type="password" autocomplete="current-password" required></div>
+            <button class="primario" type="submit">Entrar</button>
+            <button class="enlace" type="button" id="ir-registro">Tengo un código de invitación</button>
+          </form>
+        </div>
+        <div id="bloque-registro" class="oculto">
+          <form id="form-registro">
+            <h1>Crea tu cuenta</h1>
+            <p>Necesitas el código de invitación del club.</p>
+            <div class="campo"><label for="r-nombre">Nombre de jugador</label><input id="r-nombre" type="text" minlength="2" maxlength="20" autocomplete="nickname" required></div>
+            <div class="campo"><label for="r-correo">Correo</label><input id="r-correo" type="email" autocomplete="email" required></div>
+            <div class="campo"><label for="r-clave">Contraseña</label><input id="r-clave" type="password" minlength="6" autocomplete="new-password" required></div>
+            <div class="campo"><label for="r-codigo">Código de invitación</label><input id="r-codigo" type="text" autocomplete="off" required></div>
+            <button class="primario" type="submit">Crear cuenta</button>
+            <button class="enlace" type="button" id="ir-entrar">Ya tengo cuenta</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
     <section id="inicio" class="oculto">
       <h1>Arma una partida y manda el link</h1>
-      <p>Quien abra el link se sienta con las negras y empiezan a jugar en tiempo real.</p>
+      <p>Elige el tiempo de cada jugador. Quien abra el link se sienta con las negras.</p>
+      <div class="tiempos" role="group" aria-label="Tiempo por jugador" id="tiempos">
+        <button type="button" data-min="3" aria-pressed="false">3 min</button>
+        <button type="button" data-min="5" aria-pressed="false">5 min</button>
+        <button type="button" data-min="10" aria-pressed="true">10 min</button>
+        <button type="button" data-min="15" aria-pressed="false">15 min</button>
+        <button type="button" data-min="30" aria-pressed="false">30 min</button>
+        <button type="button" data-min="60" aria-pressed="false">1 hora</button>
+        <button type="button" data-min="120" aria-pressed="false">2 horas</button>
+      </div>
       <div><button id="crear" class="primario">Crear partida</button></div>
     </section>
 
@@ -130,6 +197,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
           <p id="estado">Cargando partida…</p>
           <button id="copiar" class="secundario oculto">Copiar link de invitación</button>
           <button id="unirse" class="primario oculto">Unirme con las negras</button>
+          <button id="rendirse" class="secundario peligro oculto">Rendirme</button>
+          <a id="nueva" class="secundario oculto" href="./" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Volver al inicio</a>
         </div>
         <div class="panel">
           <h2>Jugadas</h2>
@@ -138,6 +207,13 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
       </aside>
     </section>
   </main>
+</div>
+<div id="coronar" class="oculto" role="dialog" aria-modal="true" aria-labelledby="coronar-titulo">
+  <div class="tarjeta">
+    <h1 id="coronar-titulo" style="font-size:26px">Elige tu nueva pieza</h1>
+    <div class="opciones-coronar" id="opciones-coronar"></div>
+    <button class="secundario" id="coronar-cancelar">Cancelar</button>
+  </div>
 </div>
 <div id="aviso" role="status" class="oculto"></div>
 <script type="module" src="./app.js"></script>

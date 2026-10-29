@@ -25,10 +25,20 @@ Deno.serve(async (req) => {
   const servicio = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   const auth = req.headers.get("Authorization") ?? "";
+  const token = auth.replace(/^Bearer\s+/i, "");
   const comoUsuario = createClient(url, anon, { global: { headers: { Authorization: auth } } });
-  const { data: sesion, error: errSesion } = await comoUsuario.auth.getUser();
-  if (errSesion || !sesion?.user) return responder({ error: "Sesión no válida" }, 401);
-  const yo = sesion.user.id;
+
+  // Verifica la sesión localmente (más rápido); si no se puede, pregunta al servidor de Auth.
+  let yo: string | undefined;
+  try {
+    const { data } = await comoUsuario.auth.getClaims(token);
+    yo = data?.claims?.sub;
+  } catch { /* sigue con el método completo */ }
+  if (!yo) {
+    const { data } = await comoUsuario.auth.getUser(token);
+    yo = data?.user?.id;
+  }
+  if (!yo) return responder({ error: "Sesión no válida" }, 401);
 
   let datos: { partida?: string; desde?: string; hacia?: string; promocion?: string };
   try {
@@ -52,6 +62,29 @@ Deno.serve(async (req) => {
   const leToca = juego.turn() === "w" ? p.blancas : p.negras;
   if (leToca !== yo) return responder({ error: "No es tu turno" }, 403);
 
+  // Reloj: descuenta el tiempo que pensó quien mueve.
+  const ahora = Date.now();
+  const campo = juego.turn() === "w" ? "reloj_blancas" : "reloj_negras";
+  const gastado = p.ultimo_tick ? ahora - new Date(p.ultimo_tick).getTime() : 0;
+  const restante = Number(p[campo]) - gastado;
+  if (restante <= 0) {
+    const { data: fin } = await db
+      .from("partidas")
+      .update({
+        estado: "terminada",
+        resultado: juego.turn() === "w" ? "0-1" : "1-0",
+        motivo: "tiempo",
+        [campo]: 0,
+        version: p.version + 1,
+        actualizada: new Date(ahora).toISOString(),
+      })
+      .eq("id", partida)
+      .eq("version", p.version)
+      .select()
+      .single();
+    return responder({ error: "Se te acabó el tiempo", partida: fin }, 409);
+  }
+
   let mov;
   try {
     mov = juego.move({ from: desde, to: hacia, promotion: promocion });
@@ -61,12 +94,15 @@ Deno.serve(async (req) => {
 
   let estado = "jugando";
   let resultado: string | null = null;
+  let motivo: string | null = null;
   if (juego.isCheckmate()) {
     estado = "terminada";
     resultado = juego.turn() === "w" ? "0-1" : "1-0";
+    motivo = "jaque mate";
   } else if (juego.isDraw() || juego.isStalemate()) {
     estado = "terminada";
     resultado = "½-½";
+    motivo = "tablas";
   }
 
   const jugadas = [...(p.jugadas ?? []), { desde: mov.from, hacia: mov.to, san: mov.san }];
@@ -77,8 +113,11 @@ Deno.serve(async (req) => {
       jugadas,
       estado,
       resultado,
+      motivo,
+      [campo]: restante,
+      ultimo_tick: new Date(ahora).toISOString(),
       version: p.version + 1,
-      actualizada: new Date().toISOString(),
+      actualizada: new Date(ahora).toISOString(),
     })
     .eq("id", partida)
     .eq("version", p.version)

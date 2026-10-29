@@ -34,11 +34,16 @@ Abre la página en un navegador normal y en otro en modo incógnito. En el prime
 
 En Netlify: **Domain management › Add a domain**. Netlify te dará los datos de DNS para ponerlos en Akky.
 
+## Fase 2: cuentas, nombres y reloj
+
+1. **SQL Editor**: pega `supabase/fase2.sql` y presiona **Run**.
+2. **SQL Editor**: guarda el código del club con la instrucción que te pasó Claude en el chat. Ese código nunca se sube a GitHub.
+3. **Authentication › Sign In / Providers**: apaga **Allow anonymous sign-ins** y deja encendido **Allow new users to sign up**. Para un club entre amigos conviene apagar también **Confirm email**.
+4. **Edge Functions › jugada › Code**: reemplaza el código por el de `supabase/functions/jugada/index.ts` y presiona **Deploy**.
+5. **GitHub**: sube `app.js`, `index.html` y la carpeta `supabase` actualizados.
+
 ## Pendiente para las siguientes fases
 
-- Cuentas con nombre y código de invitación.
-- Reloj controlado por el servidor.
 - Dashboard con salas abiertas, partidas en vivo y tabla de posiciones.
-- Cámara, chat y avisos.
+- Cámara, chat, avisos y ofrecer tablas.
 - Selector de tableros y piezas (Mármol, Clásico, Ártico, 3D, RhosGFX, Render).
-- Elegir pieza al coronar (por ahora corona en dama automáticamente).
