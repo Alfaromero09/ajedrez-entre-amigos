@@ -23,3 +23,10 @@ export function piezaSVG(tipo, color) {
     `<g fill="${relleno}" stroke="${borde}" stroke-width="1.2" stroke-linejoin="round">${formas[tipo]}${base}</g>` +
     `${ojo}<ellipse cx="17" cy="34" rx="1.3" ry="5" fill="${brillo}" opacity="0.6"/></svg>`;
 }
+
+// Ícono de jugador: cabeza de Rey o de Dama.
+export function iconoSVG(avatar) {
+  const tipo = avatar === "dama" ? "q" : "k";
+  return `<svg viewBox="8 0 24 26" role="img" aria-label="${avatar === "dama" ? "Dama" : "Rey"}">` +
+    `<g fill="#F2E6CF" stroke="#6B4A2E" stroke-width="1.2" stroke-linejoin="round">${formas[tipo]}</g></svg>`;
+}

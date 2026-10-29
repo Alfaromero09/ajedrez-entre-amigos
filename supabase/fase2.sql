@@ -8,6 +8,8 @@ create table if not exists public.perfiles (
   nombre text not null check (char_length(nombre) between 2 and 20),
   creado timestamptz not null default now()
 );
+alter table public.perfiles
+  add column if not exists avatar text not null default 'rey' check (avatar in ('rey', 'dama'));
 create unique index if not exists perfiles_nombre_unico on public.perfiles (lower(nombre));
 alter table public.perfiles enable row level security;
 revoke all on public.perfiles from anon, authenticated;
@@ -35,6 +37,7 @@ declare
   v_meta   jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
   v_nombre text  := trim(coalesce(v_meta->>'nombre', ''));
   v_codigo text  := lower(trim(coalesce(v_meta->>'codigo', '')));
+  v_avatar text  := case when v_meta->>'avatar' = 'dama' then 'dama' else 'rey' end;
 begin
   if coalesce(new.is_anonymous, false) then
     raise exception 'El registro es solo con invitación';
@@ -51,7 +54,7 @@ begin
   if exists (select 1 from perfiles p where lower(p.nombre) = lower(v_nombre)) then
     raise exception 'Ese nombre ya está en uso';
   end if;
-  new.raw_user_meta_data := (v_meta - 'codigo') || jsonb_build_object('nombre', v_nombre);
+  new.raw_user_meta_data := (v_meta - 'codigo') || jsonb_build_object('nombre', v_nombre, 'avatar', v_avatar);
   return new;
 end;
 $$;
@@ -63,7 +66,8 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into perfiles (id, nombre) values (new.id, new.raw_user_meta_data->>'nombre');
+  insert into perfiles (id, nombre, avatar)
+  values (new.id, new.raw_user_meta_data->>'nombre', coalesce(new.raw_user_meta_data->>'avatar', 'rey'));
   return new;
 end;
 $$;

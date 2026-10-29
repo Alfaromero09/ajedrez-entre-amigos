@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { Chess } from "https://esm.sh/chess.js@1.4.0";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
-import { piezaSVG } from "./piezas.js";
+import { piezaSVG, iconoSVG } from "./piezas.js";
 
 const $ = (id) => document.getElementById(id);
 const COLUMNAS = "abcdefgh";
@@ -17,6 +17,7 @@ let desfase = 0;
 let reclamando = false;
 let minutosElegidos = 10;
 const nombres = {};
+const avatares = {};
 
 // ---------- Utilidades ----------
 function avisar(texto) {
@@ -46,23 +47,15 @@ async function calibrarReloj() {
 async function cargarNombres(ids) {
   const faltan = ids.filter((id) => id && !nombres[id]);
   if (!faltan.length) return false;
-  const { data } = await sb.from("perfiles").select("id, nombre").in("id", faltan);
-  (data || []).forEach((p) => (nombres[p.id] = p.nombre));
+  const { data } = await sb.from("perfiles").select("id, nombre, avatar").in("id", faltan);
+  (data || []).forEach((p) => (nombres[p.id] = p.nombre, avatares[p.id] = p.avatar));
   return true;
 }
 const nombreDe = (id) => (id === yo ? "Tú" : nombres[id] || "Jugador");
 
 // ---------- Acceso ----------
-$("ir-registro").addEventListener("click", () => {
-  $("bloque-entrar").classList.add("oculto");
-  $("bloque-registro").classList.remove("oculto");
-  $("r-nombre").focus();
-});
-$("ir-entrar").addEventListener("click", () => {
-  $("bloque-registro").classList.add("oculto");
-  $("bloque-entrar").classList.remove("oculto");
-  $("e-correo").focus();
-});
+$("icono-rey").innerHTML = iconoSVG("rey");
+$("icono-dama").innerHTML = iconoSVG("dama");
 
 $("form-entrar").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -70,7 +63,10 @@ $("form-entrar").addEventListener("submit", async (e) => {
     email: $("e-correo").value.trim(),
     password: $("e-clave").value,
   });
-  if (error) return avisar("Correo o contraseña incorrectos.");
+  if (error) {
+    if (/not confirmed/i.test(error.message)) return avisar("Primero confirma tu correo con el enlace que te mandamos.");
+    return avisar("Correo o contraseña incorrectos.");
+  }
   entrar(data.user);
 });
 
@@ -83,7 +79,14 @@ $("form-registro").addEventListener("submit", async (e) => {
   const { data, error } = await sb.auth.signUp({
     email: $("r-correo").value.trim(),
     password: $("r-clave").value,
-    options: { data: { nombre, codigo: $("r-codigo").value.trim() } },
+    options: {
+      emailRedirectTo: location.origin + location.pathname + location.search,
+      data: {
+        nombre,
+        avatar: document.querySelector('input[name="avatar"]:checked')?.value || "rey",
+        codigo: $("r-codigo").value.trim(),
+      },
+    },
   });
   if (error) {
     if (/database error/i.test(error.message)) return avisar("El código de invitación no es correcto.");
@@ -91,7 +94,10 @@ $("form-registro").addEventListener("submit", async (e) => {
     if (/password/i.test(error.message)) return avisar("La contraseña debe tener al menos 6 caracteres.");
     return avisar("No se pudo crear la cuenta. Intenta de nuevo.");
   }
-  if (!data.session) return avisar("Te mandamos un correo para confirmar tu cuenta.");
+  if (!data.session) {
+    e.target.reset();
+    return avisar("Listo. Te mandamos un correo: abre el enlace para confirmar tu cuenta y luego entra.");
+  }
   entrar(data.user);
 });
 
@@ -105,6 +111,7 @@ async function entrar(usuario) {
   await Promise.all([cargarNombres([yo]), calibrarReloj()]);
   nombres[yo] = nombres[yo] || usuario.user_metadata?.nombre || "Jugador";
   $("mi-nombre").textContent = nombres[yo];
+  $("mi-icono").innerHTML = iconoSVG(avatares[yo] || usuario.user_metadata?.avatar);
   $("cabecera-usuario").classList.remove("oculto");
   const id = idDeLaUrl();
   if (id) abrirPartida(id);
@@ -284,7 +291,8 @@ function dibujar() {
   const tira = (c) => {
     const id = c === "w" ? partida.blancas : partida.negras;
     const nombre = id ? nombreDe(id) : "Lugar libre";
-    return `<div><strong>${esc(nombre)}</strong><small>${c === "w" ? "Blancas" : "Negras"}</small></div>` +
+    const icono = id ? `<span class="avatar">${iconoSVG(avatares[id])}</span>` : "";
+    return `<div>${icono}<div><strong>${esc(nombre)}</strong><small>${c === "w" ? "Blancas" : "Negras"}</small></div></div>` +
       `<span class="reloj" id="reloj-${c}">--:--</span>`;
   };
   $("arriba").innerHTML = tira(volteado ? "w" : "b");

@@ -97,7 +97,18 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .cabecera-derecha { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .cabecera-derecha span { font-family: inherit; font-size: 15px; color: var(--suave); letter-spacing: 0; }
 
-#acceso { display: flex; justify-content: center; padding: 32px 0; }
+#acceso { padding: 32px 0; }
+.acceso-grid { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; }
+.acceso-grid .tarjeta { flex: 1 1 340px; }
+.genero { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.genero legend { font-size: 14px; color: var(--suave); margin-bottom: 6px; padding: 0; }
+.genero label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(233,220,195,0.16); cursor: pointer; }
+.genero input { accent-color: var(--laton); }
+.genero label:has(input:checked) { border-color: var(--laton); background: #3A281C; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: #4A3221; display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden; }
+.avatar svg { width: 72%; height: auto; display: block; }
+.avatar.grande { width: 40px; height: 40px; }
+.jugador > div:first-child { display: flex; align-items: center; gap: 12px; }
 .tarjeta { width: 100%; max-width: 420px; background: var(--panel); border: 1px solid var(--linea); border-radius: 20px; padding: 32px; box-shadow: var(--sombra-2); display: flex; flex-direction: column; gap: 20px; }
 .tarjeta h1 { font-size: 36px; line-height: 1.1; }
 .tarjeta p { margin: 0; color: var(--suave); }
@@ -134,6 +145,7 @@ form { display: flex; flex-direction: column; gap: 16px; }
       <span>Ajedrez entre Amigos</span>
     </a>
     <div class="cabecera-derecha oculto" id="cabecera-usuario">
+      <span class="avatar" id="mi-icono"></span>
       <span id="mi-nombre"></span>
       <button id="salir" class="secundario">Salir</button>
     </div>
@@ -141,28 +153,27 @@ form { display: flex; flex-direction: column; gap: 16px; }
 
   <main>
     <section id="acceso" class="oculto">
-      <div class="tarjeta">
-        <div id="bloque-entrar">
-          <form id="form-entrar">
-            <h1>Bienvenido al club</h1>
-            <div class="campo"><label for="e-correo">Correo</label><input id="e-correo" type="email" autocomplete="email" required></div>
-            <div class="campo"><label for="e-clave">Contraseña</label><input id="e-clave" type="password" autocomplete="current-password" required></div>
-            <button class="primario" type="submit">Entrar</button>
-            <button class="enlace" type="button" id="ir-registro">Tengo un código de invitación</button>
-          </form>
-        </div>
-        <div id="bloque-registro" class="oculto">
-          <form id="form-registro">
-            <h1>Crea tu cuenta</h1>
-            <p>Necesitas el código de invitación del club.</p>
-            <div class="campo"><label for="r-nombre">Nombre de jugador</label><input id="r-nombre" type="text" minlength="2" maxlength="20" autocomplete="nickname" required></div>
-            <div class="campo"><label for="r-correo">Correo</label><input id="r-correo" type="email" autocomplete="email" required></div>
-            <div class="campo"><label for="r-clave">Contraseña</label><input id="r-clave" type="password" minlength="6" autocomplete="new-password" required></div>
-            <div class="campo"><label for="r-codigo">Código de invitación</label><input id="r-codigo" type="text" autocomplete="off" required></div>
-            <button class="primario" type="submit">Crear cuenta</button>
-            <button class="enlace" type="button" id="ir-entrar">Ya tengo cuenta</button>
-          </form>
-        </div>
+      <div class="acceso-grid">
+        <form id="form-registro" class="tarjeta">
+          <h1>Crea tu cuenta</h1>
+          <p>Necesitas el código de invitación del club.</p>
+          <div class="campo"><label for="r-nombre">Nombre de jugador</label><input id="r-nombre" type="text" minlength="2" maxlength="20" autocomplete="nickname" required></div>
+          <div class="campo"><label for="r-correo">Correo</label><input id="r-correo" type="email" autocomplete="email" required></div>
+          <fieldset class="genero">
+            <legend>Género</legend>
+            <label><input type="radio" name="avatar" value="rey" checked><span class="avatar grande" id="icono-rey"></span>Hombre</label>
+            <label><input type="radio" name="avatar" value="dama"><span class="avatar grande" id="icono-dama"></span>Mujer</label>
+          </fieldset>
+          <div class="campo"><label for="r-clave">Contraseña</label><input id="r-clave" type="password" minlength="6" autocomplete="new-password" required></div>
+          <div class="campo"><label for="r-codigo">Código de invitación</label><input id="r-codigo" type="text" autocomplete="off" required></div>
+          <button class="primario" type="submit">Crear cuenta</button>
+        </form>
+        <form id="form-entrar" class="tarjeta">
+          <h1>Ya soy del club</h1>
+          <div class="campo"><label for="e-correo">Correo</label><input id="e-correo" type="email" autocomplete="email" required></div>
+          <div class="campo"><label for="e-clave">Contraseña</label><input id="e-clave" type="password" autocomplete="current-password" required></div>
+          <button class="primario" type="submit">Entrar</button>
+        </form>
       </div>
     </section>
 
