@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.117.3";
 import { Chess } from "https://esm.sh/chess.js@1.4.0";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 import { piezaSVG, iconoSVG } from "./piezas.js";
+import { TABLEROS, PIEZAS, DEFS_3D, pieza as dibujoPieza } from "./estilos.js";
 
 const $ = (id) => document.getElementById(id);
 const COLUMNAS = "abcdefgh";
@@ -244,7 +245,7 @@ async function cargarClub() {
 const CORONA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="#2A1C0C"/></svg>';
 const MANOS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#FFF4EC" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/><path d="M5 8h14" opacity="0.5"/><path d="M5 16h14" opacity="0.5"/></svg>';
 const COPA = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="#2A1C0C"><path d="M7 3h10v3h3a3 3 0 0 1-3 4.6A5 5 0 0 1 13 14v3h3v3H8v-3h3v-3a5 5 0 0 1-4-3.4A3 3 0 0 1 4 6h3zm-1 5a1 1 0 0 0 1 .9V6H6zm11 .9a1 1 0 0 0 1-.9V6h-1z"/></svg>';
-const porQue = (m) => ({ "jaque mate": "por jaque mate", tiempo: "por tiempo", abandono: "por abandono", tablas: "en tablas" })[m] || "";
+const porQue = (m) => ({ "jaque mate": "por jaque mate", tiempo: "por tiempo", abandono: "por abandono", tablas: "en tablas", acuerdo: "de común acuerdo" })[m] || "";
 
 function hacePoco(fecha) {
   const min = Math.max(0, Math.round((ahoraServidor() - new Date(fecha).getTime()) / 60000));
@@ -689,12 +690,14 @@ async function abrirPartida(id) {
   }
   partida = data;
   await cargarNombres([partida.blancas, partida.negras]);
+  cargarChat(id);
   dibujar();
 
   if (canal) sb.removeChannel(canal);
   canal = sb
     .channel(`partida-${id}`)
     .on("broadcast", { event: "jugada" }, ({ payload }) => aplicarRemota(payload))
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensajes", filter: `partida=eq.${id}` }, ({ new: m }) => agregarMensaje(m, true))
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "partidas", filter: `id=eq.${id}` }, async (cambio) => {
       if (cambio.new.version > partida.version || (cambio.new.version === partida.version && !partida.optimista)) {
         partida = cambio.new;
@@ -850,7 +853,7 @@ function pintarHud(juego, color, turno, material) {
 // ---------- Celebración de fin de partida ----------
 const estadoVisto = {};
 const celebradas = new Set();
-const MOTIVO = { "jaque mate": "por jaque mate", tiempo: "por tiempo", abandono: "por abandono", tablas: "" };
+const MOTIVO = { "jaque mate": "por jaque mate", tiempo: "por tiempo", abandono: "por abandono", tablas: "", acuerdo: "" };
 
 function revisarFinal() {
   const antes = estadoVisto[partida.id];
@@ -979,7 +982,10 @@ function dibujar() {
   else colgarTodas();
   actualizarPresencia();
   $("unirse").classList.toggle("oculto", !(partida.estado === "esperando" && color !== "w"));
-  $("rendirse").classList.toggle("oculto", !(jugando && color));
+  $("acciones-juego").classList.toggle("oculto", !(jugando && color));
+  pintarTablas(color);
+  $("form-chat").classList.toggle("oculto", !color);
+  avisarTurno(color, turno);
   $("nueva").classList.toggle("oculto", partida.estado !== "terminada" && !!color);
   if (partida.estado === "esperando") {
     estado.textContent = color === "w"
@@ -1034,8 +1040,10 @@ function dibujar() {
       btn.setAttribute("aria-label", casilla + (pieza ? "" : ", vacía"));
       if (pieza) {
         const div = document.createElement("div");
-        div.className = "pieza";
-        div.innerHTML = piezaSVG(pieza.type, pieza.color);
+        const d = dibujoPieza(estiloPiezas, pieza.type, pieza.color);
+        div.className = d.clase;
+        div.innerHTML = d.html;
+        if (d.posicion) div.style.backgroundPosition = d.posicion;
         btn.appendChild(div);
       }
       btn.addEventListener("click", () => tocar(casilla, juego, puedoMover, color));
@@ -1172,6 +1180,127 @@ async function mover(desde, hacia, promocion) {
     if (partida.optimista || data.partida.version >= partida.version) partida = data.partida;
   }
   dibujar();
+}
+
+// ---------- Vista personal: tablero y piezas (solo en esta pestaña, sin memoria) ----------
+let estiloTablero = "nogal";
+let estiloPiezas = "ilustradas";
+document.body.insertAdjacentHTML("beforeend", DEFS_3D);
+function pintarSelectores() {
+  $("elegir-tablero").innerHTML = Object.entries(TABLEROS).map(([k, t]) =>
+    `<button type="button" data-tablero="${k}" aria-pressed="${k === estiloTablero}">${t.nombre}</button>`).join("");
+  $("elegir-piezas").innerHTML = Object.entries(PIEZAS).map(([k, n]) =>
+    `<button type="button" data-piezas="${k}" aria-pressed="${k === estiloPiezas}">${n}</button>`).join("");
+}
+function aplicarTablero() {
+  const t = TABLEROS[estiloTablero];
+  const m = $("marco");
+  m.style.setProperty("--casilla-clara", t.clara);
+  m.style.setProperty("--casilla-oscura", t.oscura);
+  m.style.setProperty("--marca-clara", t.marcaClara);
+  m.style.setProperty("--marca-oscura", t.marcaOscura);
+  m.style.background = t.marco;
+}
+$("elegir-tablero").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-tablero]");
+  if (!b) return;
+  estiloTablero = b.dataset.tablero;
+  pintarSelectores();
+  aplicarTablero();
+});
+$("elegir-piezas").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-piezas]");
+  if (!b) return;
+  estiloPiezas = b.dataset.piezas;
+  pintarSelectores();
+  if (partida) dibujar();
+});
+pintarSelectores();
+aplicarTablero();
+
+// ---------- Ofrecer tablas ----------
+function pintarTablas(color) {
+  const vigente = partida.estado === "jugando" && partida.tablas_ofrece && partida.tablas_version === partida.version;
+  const mia = vigente && partida.tablas_ofrece === yo;
+  const deRival = vigente && color && partida.tablas_ofrece !== yo;
+  $("oferta-tablas").classList.toggle("oculto", !deRival);
+  if (deRival) $("oferta-texto").innerHTML = `<strong>${esc(nombres[partida.tablas_ofrece] || "Tu rival")}</strong> te ofrece tablas. Si aceptas, la partida termina empatada.`;
+  const btn = $("ofrecer-tablas");
+  btn.disabled = !!mia || !!deRival;
+  btn.textContent = mia ? "Tablas ofrecidas…" : "Ofrecer tablas";
+}
+$("ofrecer-tablas").addEventListener("click", async () => {
+  const { error } = await sb.rpc("ofrecer_tablas", { p: partida.id });
+  if (error) return avisar("No se pudo ofrecer tablas. Intenta de nuevo.");
+  avisar("Ofreciste tablas. Si tu rival mueve, la oferta se cancela.");
+});
+async function responderTablas(acepta) {
+  const { error } = await sb.rpc("responder_tablas", { p: partida.id, acepta });
+  if (error) avisar("Esa oferta ya no está vigente.");
+}
+$("tablas-si").addEventListener("click", () => responderTablas(true));
+$("tablas-no").addEventListener("click", () => responderTablas(false));
+
+// ---------- Chat de la partida ----------
+let chatDe = null;
+const vistos = new Set();
+async function cargarChat(id) {
+  chatDe = id;
+  vistos.clear();
+  $("mensajes").innerHTML = "";
+  const { data } = await sb.from("mensajes").select("*").eq("partida", id).order("id", { ascending: true }).limit(200);
+  if (chatDe !== id) return;
+  (data || []).forEach((m) => agregarMensaje(m, false));
+  if (!(data || []).length) $("mensajes").innerHTML = '<p class="vacio" id="chat-vacio">Saluda a tu rival.</p>';
+}
+function agregarMensaje(m, nuevo) {
+  if (!m || m.partida !== chatDe || vistos.has(m.id)) return;
+  vistos.add(m.id);
+  $("chat-vacio")?.remove();
+  const mio = m.autor === yo;
+  const caja = $("mensajes");
+  const el = document.createElement("div");
+  el.className = `burbuja ${mio ? "mia" : "suya"}`;
+  el.innerHTML = (mio ? "" : `<small>${esc(nombres[m.autor] || "Jugador")}</small>`) + esc(m.texto);
+  caja.appendChild(el);
+  caja.scrollTop = caja.scrollHeight;
+  if (nuevo && !mio) {
+    tic(520);
+    if (document.hidden) avisoPestana(`💬 ${nombres[m.autor] || "Tu rival"} te escribió`);
+  }
+}
+$("form-chat").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("chat-texto");
+  const texto = input.value.trim();
+  if (!texto || !partida) return;
+  input.value = "";
+  const { data, error } = await sb.from("mensajes").insert({ partida: partida.id, texto }).select().single();
+  if (error) { input.value = texto; return avisar("No se pudo enviar el mensaje."); }
+  agregarMensaje(data, false);
+});
+
+// ---------- Avisos ----------
+let jugadasVistas = { id: null, n: 0 };
+function avisarTurno(color, turno) {
+  const n = partida.jugadas.length;
+  const cambio = jugadasVistas.id === partida.id && n > jugadasVistas.n;
+  jugadasVistas = { id: partida.id, n };
+  if (!cambio || !color || partida.estado !== "jugando" || turno !== color) return;
+  tic(660);
+  if (document.hidden) avisoPestana("♟ Te toca mover");
+}
+function avisoPestana(texto) { document.title = texto; }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "Ajedrez entre Amigos"; });
+let audioTic = null;
+function tic(frecuencia) {
+  try {
+    audioTic = audioTic || new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioTic.currentTime, o = audioTic.createOscillator(), g = audioTic.createGain();
+    o.type = "triangle"; o.frequency.value = frecuencia;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    o.connect(g).connect(audioTic.destination); o.start(t); o.stop(t + 0.16);
+  } catch {}
 }
 
 // ---------- Vista personal (solo en este navegador) ----------

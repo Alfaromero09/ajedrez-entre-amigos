@@ -6,7 +6,7 @@
 <title>Ajedrez entre Amigos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Hanken+Grotesk:wght@400;500;600&family=Noto+Sans+Symbols+2&display=swap">
 <style>
 :root {
   --fondo: #1C130C;
@@ -383,6 +383,41 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .colgar-btn:hover { background-color: #3A281C; }
 .llamada-cuenta { font-size: 13px; color: #8F7C63; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .onda, .llamar-btn.sonando, .llamar-btn.sonando svg { animation: none !important; } }
+
+/* ---------- Fase 4: vista, tablas y chat ---------- */
+.barra-vista { flex-direction: column; align-items: stretch; gap: 10px; max-width: 640px; }
+.vista-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.vista-fila label, .vista-etiqueta { min-width: 56px; color: var(--suave); font-size: 14px; }
+.vista-fila input[type="range"] { flex: 1; accent-color: var(--laton); }
+.segmentos { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; background: #1F150E; }
+.segmentos button { height: 32px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: var(--suave); font-size: 13px; transition: background-color 160ms ease, color 160ms ease; }
+.segmentos button:hover { color: var(--texto); transform: none; }
+.segmentos button[aria-pressed="true"] { background: #4A3221; color: var(--texto); }
+.p-geo { left: 12%; width: 76%; }
+.p-3d { left: 8%; width: 84%; bottom: 6%; }
+.p-3d svg { overflow: visible; }
+.p-rhos { left: 4%; width: 92%; bottom: 2%; }
+.p-sprite { left: -25%; width: 150%; aspect-ratio: 1 / 1; bottom: -18%; transform-origin: 50% 82%; background-repeat: no-repeat; background-size: 600% 200%; }
+.p-sprite.render-marmol { background-image: url("img/render-marmol.png"); }
+.p-sprite.render-madera { background-image: url("img/render-madera.png"); }
+.p-glifo { left: 0; width: 100%; bottom: 8%; text-align: center; font-family: "Noto Sans Symbols 2", "Segoe UI Symbol", "DejaVu Sans", sans-serif; font-variant-emoji: text; font-size: min(5.6vw, 52px); line-height: 1; }
+.p-glifo.blanca { color: #FBF6EC; -webkit-text-stroke: 1px #2A1A10; }
+.p-glifo.negra { color: #1E140D; -webkit-text-stroke: 0.8px #CBB894; }
+.acciones-juego { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.acciones-juego .secundario:disabled { opacity: 0.6; cursor: default; transform: none; }
+.oferta { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(127,168,110,0.12); border: 1px solid rgba(127,168,110,0.45); animation: subir 420ms var(--resorte) both; }
+.oferta p { margin: 0; font-size: 15px; line-height: 1.5; }
+.oferta-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.mensajes { display: flex; flex-direction: column; gap: 6px; max-height: 220px; min-height: 48px; overflow-y: auto; padding-right: 4px; }
+.burbuja { max-width: 82%; padding: 7px 12px; border-radius: 12px; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; animation: aparecer 200ms ease-out both; }
+.burbuja.mia { align-self: flex-end; background: #4A3221; border-bottom-right-radius: 4px; }
+.burbuja.suya { align-self: flex-start; background: #33241A; color: #E9DCC3; border-bottom-left-radius: 4px; }
+.burbuja small { display: block; font-size: 11px; color: var(--suave); margin-bottom: 1px; }
+.chat-forma { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.chat-forma input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); font: inherit; font-size: 15px; }
+.chat-enviar { flex: none; width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--laton); color: var(--tinta); display: grid; place-items: center; }
+.chat-enviar svg { width: 18px; height: 18px; }
+.solo-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -531,9 +566,19 @@ form { display: flex; flex-direction: column; gap: 16px; }
         <div class="escena"><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div></div>
         <div class="jugador" id="abajo"></div>
         <div class="barra-vista">
-          <label for="angulo">Ángulo del tablero</label>
-          <input id="angulo" type="range" min="0" max="75" step="1" value="30">
-          <output id="angulo-valor" for="angulo">30°</output>
+          <div class="vista-fila">
+            <label for="angulo">Ángulo</label>
+            <input id="angulo" type="range" min="0" max="75" step="1" value="30">
+            <output id="angulo-valor" for="angulo">30°</output>
+          </div>
+          <div class="vista-fila">
+            <span class="vista-etiqueta" id="et-tablero">Tablero</span>
+            <div class="segmentos" role="group" aria-labelledby="et-tablero" id="elegir-tablero"></div>
+          </div>
+          <div class="vista-fila">
+            <span class="vista-etiqueta" id="et-piezas">Piezas</span>
+            <div class="segmentos" role="group" aria-labelledby="et-piezas" id="elegir-piezas"></div>
+          </div>
         </div>
       </div>
       <aside class="lateral">
@@ -549,8 +594,27 @@ form { display: flex; flex-direction: column; gap: 16px; }
             </div>
           </div>
           <button id="unirse" class="primario oculto">Unirme con las negras</button>
-          <button id="rendirse" class="secundario peligro oculto">Rendirme</button>
+          <div id="oferta-tablas" class="oferta oculto" role="status">
+            <p id="oferta-texto"></p>
+            <div class="oferta-botones">
+              <button id="tablas-si" class="btn-fila verde">Aceptar tablas</button>
+              <button id="tablas-no" class="btn-fila fantasma">Seguir jugando</button>
+            </div>
+          </div>
+          <div id="acciones-juego" class="acciones-juego oculto">
+            <button id="ofrecer-tablas" class="secundario">Ofrecer tablas</button>
+            <button id="rendirse" class="secundario peligro">Rendirme</button>
+          </div>
           <a id="nueva" class="secundario oculto" href="./" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Volver al inicio</a>
+        </div>
+        <div class="panel chat" id="chat">
+          <h2>Chat</h2>
+          <div id="mensajes" class="mensajes" aria-live="polite"></div>
+          <form id="form-chat" class="chat-forma">
+            <label for="chat-texto" class="solo-lector">Escribe un mensaje</label>
+            <input id="chat-texto" type="text" maxlength="300" autocomplete="off" placeholder="Escribe algo…">
+            <button type="submit" class="chat-enviar" aria-label="Enviar mensaje"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-2-7z"/></svg></button>
+          </form>
         </div>
         <div class="panel">
           <h2>Jugadas</h2>
