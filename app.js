@@ -35,6 +35,12 @@ const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
 function mostrar(vista) {
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
+  if (vista === "inicio") {
+    if (canal) { sb.removeChannel(canal); canal = null; }
+    partida = null;
+    cargarClub();
+  }
+  presenciaEstado(vista === "partida" ? "partida" : "club");
 }
 
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -149,6 +155,7 @@ async function entrar(usuario) {
   $("mi-nombre").textContent = nombres[yo];
   $("mi-icono").innerHTML = iconoSVG(avatares[yo] || usuario.user_metadata?.avatar);
   $("cabecera-usuario").classList.remove("oculto");
+  escucharClub();
   const id = idDeLaUrl();
   if (id) abrirPartida(id);
   else mostrar("inicio");
@@ -168,9 +175,229 @@ $("tiempos").addEventListener("click", (e) => {
 $("crear").addEventListener("click", async () => {
   const { data, error } = await sb.rpc("crear_partida", { p_minutos: minutosElegidos });
   if (error) return avisar("No se pudo crear la partida. Intenta de nuevo.");
-  history.pushState(null, "", `?p=${data}`);
-  abrirPartida(data);
+  irAPartida(data);
 });
+
+// ---------- Dashboard del club ----------
+const ICONO_RELOJ = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
+const ICONO_OJO = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0"/><path d="M21 12c-2.4 4-5.4 6-9 6s-6.6-2-9-6c2.4-4 5.4-6 9-6s6.6 2 9 6"/></svg>';
+let canalClub = null;
+let enLinea = {};
+let ultimasSalas = [];
+let ultimasVivo = [];
+let pendienteClub = null;
+
+const textoTiempo = (min) => (min >= 60 ? `${min / 60} ${min === 60 ? "hora" : "horas"}` : `${min} min`);
+const ficha = (id, extra = "") => `<span class="ficha ${extra}">${iconoSVG(avatares[id] || "rey")}</span>`;
+
+function hace(fecha) {
+  const min = Math.max(0, Math.round((ahoraServidor() - new Date(fecha).getTime()) / 60000));
+  if (min < 1) return "Abrió hace un momento";
+  if (min < 60) return `Abrió hace ${min} min`;
+  const h = Math.round(min / 60);
+  return `Abrió hace ${h} ${h === 1 ? "hora" : "horas"}`;
+}
+
+function saludar() {
+  const h = new Date().getHours();
+  const parte = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
+  $("saludo").textContent = `${parte}, ${nombres[yo] || "jugador"}`;
+}
+
+function irAPartida(id) {
+  history.pushState(null, "", `?p=${id}`);
+  abrirPartida(id);
+}
+
+async function cargarClub() {
+  if (!yo) return;
+  saludar();
+  const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const [salasR, vivoR, mesaR, mioR] = await Promise.all([
+    sb.from("partidas").select("id, blancas, minutos, creada").eq("estado", "esperando").gte("creada", desde).order("creada", { ascending: false }).limit(30),
+    sb.from("partidas").select("id, blancas, negras, minutos, jugadas, actualizada, fen, reloj_blancas, reloj_negras, ultimo_tick").eq("estado", "jugando").order("actualizada", { ascending: false }).limit(20),
+    sb.rpc("mesa_del_club"),
+    sb.from("partidas").select("blancas, negras, resultado").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).or(`blancas.eq.${yo},negras.eq.${yo}`).order("actualizada", { ascending: false }).limit(50),
+  ]);
+  const salas = salasR.data || [];
+  // Fuera las que ya se quedaron sin tiempo aunque nadie lo haya reclamado
+  const vivo = (vivoR.data || []).filter((x) => {
+    if (!x.ultimo_tick) return true;
+    const resta = (x.fen.split(" ")[1] === "w" ? x.reloj_blancas : x.reloj_negras) - (ahoraServidor() - new Date(x.ultimo_tick).getTime());
+    return resta > 0;
+  });
+  const mesa = mesaR.data || [];
+  mesa.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; });
+  await cargarNombres([...salas.map((x) => x.blancas), ...vivo.flatMap((x) => [x.blancas, x.negras])]);
+  ultimasSalas = salas;
+  ultimasVivo = vivo;
+  if ($("inicio").classList.contains("oculto")) return;
+  pintarSalas(salas);
+  pintarVivo(vivo);
+  pintarMesa(mesa);
+  pintarNumeros(mesa.find((m) => m.id === yo), mioR.data || []);
+  pintarResumen();
+  pintarEnLinea();
+}
+
+function pintarSalas(salas) {
+  const ajenas = salas.filter((x) => x.blancas !== yo).length;
+  $("cuenta-salas").textContent = ajenas ? `${ajenas} ${ajenas === 1 ? "esperando rival" : "esperando rival"}` : "";
+  if (!salas.length) {
+    $("salas").innerHTML = '<p class="vacio-club">No hay salas abiertas. Crea una partida y aparecerá aquí para que cualquiera del club se una.</p>';
+    return;
+  }
+  $("salas").innerHTML = salas.map((x) => {
+    const mia = x.blancas === yo;
+    const botones = mia
+      ? `<button class="secundario" data-abrir="${x.id}">Abrir</button><button class="secundario" data-cancelar="${x.id}">Cerrar sala</button>`
+      : `<button class="primario" data-unirse="${x.id}">Unirse</button>`;
+    return `<div class="fila-sala">
+      <div class="quien">${ficha(x.blancas)}<div><strong>${esc(mia ? "Tu sala" : nombres[x.blancas] || "Jugador")}</strong><small>${hace(x.creada)}</small></div></div>
+      <span class="reloj-chip">${ICONO_RELOJ}${textoTiempo(x.minutos)}</span>
+      <div class="acciones">${botones}</div>
+    </div>`;
+  }).join("");
+}
+
+function pintarVivo(vivo) {
+  if (!vivo.length) {
+    $("en-vivo").innerHTML = '<p class="vacio-club">Ahorita nadie está jugando. Cuando empiece una partida, aquí podrás mirarla.</p>';
+    return;
+  }
+  $("en-vivo").innerHTML = vivo.map((x) => {
+    const mia = x.blancas === yo || x.negras === yo;
+    const n = Math.ceil((x.jugadas?.length || 0) / 2);
+    const meta = `${textoTiempo(x.minutos)} · ${n ? `jugada ${n}` : "recién empieza"}`;
+    const nb = x.blancas === yo ? "Tú" : nombres[x.blancas] || "Jugador";
+    const nn = x.negras === yo ? "Tú" : nombres[x.negras] || "Jugador";
+    return `<div class="carta-vivo${mia ? " mia" : ""}">
+      <div class="duelo"><span class="parejas">${ficha(x.blancas, "clara")}${ficha(x.negras, "oscura")}</span><strong>${esc(nb)} vs ${esc(nn)}</strong></div>
+      <div class="pie-vivo"><span>${meta}</span>${mia
+        ? `<button class="primario mirar" data-abrir="${x.id}">Volver a mi partida</button>`
+        : `<button class="secundario mirar" data-abrir="${x.id}">${ICONO_OJO}Mirar</button>`}</div>
+    </div>`;
+  }).join("");
+}
+
+function pintarMesa(mesa) {
+  const filas = mesa.filter((m) => m.pj > 0 || m.id === yo);
+  if (!filas.length) {
+    $("mesa").innerHTML = '<p class="vacio-club">Todavía no se termina ninguna partida. La primera victoria abre la tabla.</p>';
+    return;
+  }
+  let pos = 0, previo = null;
+  $("mesa").innerHTML = filas.map((m, i) => {
+    if (m.pts !== previo) { pos = i + 1; previo = m.pts; }
+    const yoSoy = m.id === yo;
+    return `<div class="mesa-fila${yoSoy ? " yo" : ""}">
+      <span class="pos">${pos}</span>
+      <span class="nom">${ficha(m.id, "chica")}<b>${esc(m.nombre)}</b>${yoSoy ? '<span class="etiqueta-tu">Tú</span>' : ""}</span>
+      <span>${m.pj}</span><span>${m.g}</span><span>${m.p}</span><span>${m.t}</span><span class="pts">${m.pts}</span>
+    </div>`;
+  }).join("");
+}
+
+function pintarNumeros(m, mias) {
+  const d = m || { pj: 0, g: 0, p: 0, t: 0 };
+  $("n-pj").textContent = d.pj;
+  $("n-g").textContent = d.g;
+  $("n-p").textContent = d.p;
+  $("n-t").textContent = d.t;
+  const pct = d.pj ? Math.round((d.g / d.pj) * 100) : 0;
+  $("n-pct").textContent = `${pct}%`;
+  $("n-barra").style.width = `${pct}%`;
+  let racha = 0;
+  for (const x of mias) {
+    const gane = (x.blancas === yo && x.resultado === "1-0") || (x.negras === yo && x.resultado === "0-1");
+    if (!gane) break;
+    racha++;
+  }
+  $("n-racha").textContent = !d.pj
+    ? "Juega tu primera partida para estrenar tus números."
+    : racha >= 2 ? `Llevas ${racha} victorias seguidas.`
+    : racha === 1 ? "Ganaste tu última partida."
+    : "La siguiente es la buena.";
+}
+
+function estadoDe(id) {
+  if (ultimasVivo.some((x) => x.blancas === id || x.negras === id)) return "Jugando";
+  if (ultimasSalas.some((x) => x.blancas === id)) return "Esperando rival";
+  return "En el club";
+}
+
+function pintarEnLinea() {
+  const ids = Object.keys(enLinea);
+  if (!ids.length) {
+    $("en-linea").innerHTML = '<p class="vacio-club">Solo estás tú por ahora.</p>';
+    return;
+  }
+  ids.sort((a, b) => (a === yo ? -1 : b === yo ? 1 : (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || "")));
+  $("en-linea").innerHTML = ids.map((id) => {
+    const u = enLinea[id];
+    return `<div class="persona">${ficha(id, "chica punto")}<div><strong>${esc(id === yo ? `${u.nombre} (tú)` : u.nombre)}</strong><small>${estadoDe(id)}</small></div></div>`;
+  }).join("");
+}
+
+function pintarResumen() {
+  const esperando = [...new Set(ultimasSalas.filter((x) => x.blancas !== yo).map((x) => nombres[x.blancas] || "Alguien"))];
+  const vivos = ultimasVivo.length;
+  let a;
+  if (!esperando.length) a = "Nadie está esperando rival.";
+  else if (esperando.length === 1) a = `${esperando[0]} está esperando rival.`;
+  else if (esperando.length === 2) a = `${esperando[0]} y ${esperando[1]} están esperando rival.`;
+  else a = `${esperando.length} jugadores están esperando rival.`;
+  const b = vivos === 0 ? " Crea una partida y comparte el link." : vivos === 1 ? " Hay una partida en vivo por si quieres mirar." : ` Hay ${vivos} partidas en vivo por si quieres mirar.`;
+  $("resumen").textContent = a + b;
+}
+
+$("inicio").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.abrir) return irAPartida(b.dataset.abrir);
+  if (b.dataset.unirse) {
+    b.disabled = true;
+    const { error } = await sb.rpc("unirse_partida", { p: b.dataset.unirse });
+    if (error) { b.disabled = false; cargarClub(); return avisar("Alguien más tomó esa sala. Elige otra."); }
+    return irAPartida(b.dataset.unirse);
+  }
+  if (b.dataset.cancelar) {
+    b.disabled = true;
+    const { error } = await sb.rpc("cancelar_partida", { p: b.dataset.cancelar });
+    if (error) avisar("Esa sala ya no se puede cerrar.");
+    cargarClub();
+  }
+});
+
+function refrescarClub() {
+  clearTimeout(pendienteClub);
+  pendienteClub = setTimeout(() => { if (!$("inicio").classList.contains("oculto")) cargarClub(); }, 400);
+}
+
+function escucharClub() {
+  if (canalClub) return;
+  canalClub = sb.channel("club", { config: { presence: { key: yo } } })
+    .on("postgres_changes", { event: "*", schema: "public", table: "partidas" }, refrescarClub)
+    .on("presence", { event: "sync" }, () => {
+      const estado = canalClub.presenceState();
+      enLinea = {};
+      for (const [id, metas] of Object.entries(estado)) {
+        const m = metas[0] || {};
+        enLinea[id] = { nombre: m.nombre || nombres[id] || "Jugador" };
+        if (m.avatar) avatares[id] = m.avatar;
+      }
+      if (!$("inicio").classList.contains("oculto")) pintarEnLinea();
+    })
+    .subscribe((estado) => {
+      if (estado === "SUBSCRIBED") presenciaEstado("club");
+    });
+}
+
+function presenciaEstado(donde) {
+  if (!canalClub || !yo) return;
+  canalClub.track({ nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", donde }).catch(() => {});
+}
+setInterval(() => { if (yo && !$("inicio").classList.contains("oculto")) { pintarSalas(ultimasSalas); } }, 60000);
 
 // ---------- Partida ----------
 async function recargar(id) {
@@ -314,7 +541,7 @@ function dibujar() {
   $("copiar").classList.toggle("oculto", !(partida.estado === "esperando" && color === "w"));
   $("unirse").classList.toggle("oculto", !(partida.estado === "esperando" && color !== "w"));
   $("rendirse").classList.toggle("oculto", !(jugando && color));
-  $("nueva").classList.toggle("oculto", partida.estado !== "terminada");
+  $("nueva").classList.toggle("oculto", partida.estado !== "terminada" && !!color);
   if (partida.estado === "esperando") {
     estado.textContent = color === "w"
       ? "Esperando rival. Copia el link y compártelo."

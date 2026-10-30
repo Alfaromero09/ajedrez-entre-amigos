@@ -52,9 +52,85 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .secundario:hover { background-color: #3A281C; }
 .oculto { display: none !important; }
 
-#inicio { max-width: 640px; padding: 48px 0; display: flex; flex-direction: column; gap: 24px; }
-#inicio h1 { font-size: 56px; line-height: 1.05; }
-#inicio p { margin: 0; font-size: 18px; color: var(--suave); }
+#inicio { padding: 16px 0 32px; display: flex; flex-direction: column; gap: 24px; }
+#inicio p { margin: 0; }
+.saludo { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; padding-top: 8px; }
+.saludo-texto { display: flex; flex-direction: column; gap: 12px; max-width: 680px; }
+#saludo { font-size: 60px; line-height: 1.02; letter-spacing: -0.035em; }
+#resumen { font-size: 18px; line-height: 1.65; color: var(--suave); }
+.tarjeta-club { background: var(--panel); border: 1px solid var(--linea); border-radius: 20px; padding: 24px; box-shadow: var(--sombra-1); display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cabeza { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.cabeza h2 { font-size: 26px; letter-spacing: -0.02em; }
+.cabeza span { font-size: 14px; color: var(--suave); }
+.armar-fila { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.con-icono { display: inline-flex; align-items: center; gap: 8px; }
+.con-icono svg { width: 18px; height: 18px; }
+.primario:hover { filter: brightness(1.08); }
+.rejilla { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.col-principal { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
+.col-lateral { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
+.lista { display: flex; flex-direction: column; }
+.fila-sala { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 12px; border-radius: 12px; border-top: 1px solid rgba(233,220,195,0.06); transition: background-color 160ms ease; }
+.fila-sala:first-child { border-top: 0; }
+.fila-sala:hover, .mesa #mesa .mesa-fila:hover { background-color: #31221A; }
+.quien { flex: 1 1 180px; display: flex; align-items: center; gap: 14px; min-width: 0; }
+.quien > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.quien strong { font-size: 17px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quien small { font-size: 14px; color: var(--suave); }
+.ficha { flex: none; width: 44px; height: 44px; border-radius: 50%; background: #4A3221; display: grid; place-items: center; overflow: hidden; }
+.ficha svg { width: 70%; height: 70%; }
+.ficha.chica { width: 36px; height: 36px; }
+.ficha.punto { position: relative; overflow: visible; }
+.ficha.punto::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: #9CC28F; border: 2px solid var(--panel); }
+.reloj-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #3A281C; color: var(--laton-claro); font-size: 14px; font-variant-numeric: tabular-nums; }
+.reloj-chip svg { width: 15px; height: 15px; }
+.etiqueta-tu { padding: 2px 8px; border-radius: 6px; background: var(--laton); color: var(--tinta); font-size: 12px; font-weight: 600; flex: none; }
+.acciones { display: flex; gap: 8px; }
+.acciones .primario { height: 44px; padding: 0 20px; border-radius: 10px; font-size: 15px; }
+.vacio-club { padding: 20px 12px; color: var(--suave); font-size: 15px; line-height: 1.6; }
+.vivo { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.vivo .vacio-club { grid-column: 1 / -1; }
+.carta-vivo { background: var(--panel-2); border: 1px solid var(--linea); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.carta-vivo.mia { border-color: rgba(227,199,126,0.4); }
+.duelo { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.parejas { display: flex; flex: none; }
+.parejas .ficha { width: 36px; height: 36px; border: 2px solid var(--panel-2); }
+.parejas .ficha.clara { background: #F2E6CF; }
+.parejas .ficha.oscura { background: #120C08; margin-left: -10px; }
+.duelo strong { font-size: 16px; font-weight: 500; line-height: 1.35; }
+.pie-vivo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pie-vivo span { font-size: 14px; color: var(--suave); }
+.mirar { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; font-size: 14px; }
+.mirar svg { width: 16px; height: 16px; }
+.mesa-scroll { overflow-x: auto; }
+.mesa { min-width: 600px; }
+.mesa-fila { display: grid; grid-template-columns: 44px minmax(160px, 1fr) repeat(4, 76px) 80px; gap: 8px; align-items: center; padding: 12px; border-radius: 12px; font-variant-numeric: tabular-nums; }
+.mesa-fila > span:nth-child(n+3) { text-align: right; color: #CDBB9F; }
+.mesa-titulos { padding-top: 0; font-size: 13px; color: var(--suave); }
+.mesa-titulos > span { color: var(--suave) !important; }
+#mesa .mesa-fila { border-top: 1px solid rgba(233,220,195,0.06); font-size: 16px; transition: background-color 160ms ease; }
+#mesa .mesa-fila.yo { background: rgba(205,165,78,0.07); }
+.mesa .pos { font-family: "Fraunces", serif; font-size: 20px; color: var(--laton-claro); }
+.mesa .nom { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mesa .nom b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mesa .pts { font-family: "Fraunces", serif; font-size: 22px; color: var(--texto) !important; }
+.numeros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.numeros > div { background: var(--panel-2); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.numeros span { font-size: 13px; color: var(--suave); }
+.numeros strong { font-family: "Fraunces", serif; font-size: 36px; font-weight: 500; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.numeros .dorado { color: var(--laton-claro); }
+.porcentaje { display: flex; flex-direction: column; gap: 8px; }
+.porcentaje-fila { display: flex; justify-content: space-between; font-size: 14px; }
+.porcentaje-fila span { color: var(--suave); }
+.barra { height: 8px; border-radius: 4px; background: #3A281C; overflow: hidden; }
+.barra div { width: 0; height: 100%; border-radius: 4px; background: var(--laton); transition: width 500ms var(--resorte); }
+#n-racha { font-size: 14px; color: var(--suave); line-height: 1.6; }
+.en-linea { display: flex; flex-direction: column; }
+.persona { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.persona > div { display: flex; flex-direction: column; min-width: 0; }
+.persona strong { font-size: 16px; font-weight: 500; }
+.persona small { font-size: 13px; color: var(--suave); }
+@media (max-width: 640px) { #saludo { font-size: 42px; } .tarjeta-club { padding: 20px; } .armar-fila .primario { width: 100%; justify-content: center; } }
 
 #partida { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
 .zona-tablero { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -116,7 +192,6 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .campo { display: flex; flex-direction: column; gap: 6px; }
 .campo label { font-size: 14px; color: var(--suave); }
 .campo input { height: 46px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); font: inherit; font-size: 16px; }
-.armar { display: flex; flex-direction: column; gap: 24px; }
 .bienvenida { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; background: linear-gradient(135deg, rgba(205,165,78,0.16), rgba(205,165,78,0.05)); border: 1px solid rgba(227,199,126,0.32); box-shadow: var(--sombra-1); }
 .bienvenida div { display: flex; flex-direction: column; gap: 2px; }
 .bienvenida strong { font-family: "Fraunces", Georgia, serif; font-weight: 500; font-size: 20px; color: var(--texto); letter-spacing: -0.01em; }
@@ -210,19 +285,73 @@ form { display: flex; flex-direction: column; gap: 16px; }
         <span class="monitor" aria-hidden="true"><svg viewBox="0 0 64 52" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="56" height="34" rx="4"/><path d="M24 48h16M32 38v10"/></svg></span>
         <p><strong>Tip:</strong> el tablero luce mejor en computadora. Si puedes, regresa a tu escritorio y entra en <strong>ajedrezentreamigos.mx</strong>; si no, aquí también puedes jugar.</p>
       </div>
-      <div id="armar" class="armar">
-      <h1>Arma una partida y manda el link</h1>
-      <p>Elige el tiempo de cada jugador. Quien abra el link se sienta con las negras.</p>
-      <div class="tiempos" role="group" aria-label="Tiempo por jugador" id="tiempos">
-        <button type="button" data-min="3" aria-pressed="false">3 min</button>
-        <button type="button" data-min="5" aria-pressed="false">5 min</button>
-        <button type="button" data-min="10" aria-pressed="true">10 min</button>
-        <button type="button" data-min="15" aria-pressed="false">15 min</button>
-        <button type="button" data-min="30" aria-pressed="false">30 min</button>
-        <button type="button" data-min="60" aria-pressed="false">1 hora</button>
-        <button type="button" data-min="120" aria-pressed="false">2 horas</button>
+      <div class="saludo">
+        <div class="saludo-texto">
+          <h1 id="saludo">Hola</h1>
+          <p id="resumen">Revisando quién anda en el club…</p>
+        </div>
       </div>
-      <div><button id="crear" class="primario">Crear partida</button></div>
+
+      <div id="armar" class="tarjeta-club armar">
+        <div class="cabeza"><h2>Nueva partida</h2><span>Quien se una se sienta con las negras</span></div>
+        <div class="armar-fila">
+          <div class="tiempos" role="group" aria-label="Tiempo por jugador" id="tiempos">
+            <button type="button" data-min="3" aria-pressed="false">3 min</button>
+            <button type="button" data-min="5" aria-pressed="false">5 min</button>
+            <button type="button" data-min="10" aria-pressed="true">10 min</button>
+            <button type="button" data-min="15" aria-pressed="false">15 min</button>
+            <button type="button" data-min="30" aria-pressed="false">30 min</button>
+            <button type="button" data-min="60" aria-pressed="false">1 hora</button>
+            <button type="button" data-min="120" aria-pressed="false">2 horas</button>
+          </div>
+          <button id="crear" class="primario con-icono"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Crear partida</button>
+        </div>
+      </div>
+
+      <div class="rejilla">
+        <div class="col-principal">
+          <section class="tarjeta-club" aria-labelledby="t-salas">
+            <div class="cabeza"><h2 id="t-salas">Salas abiertas</h2><span id="cuenta-salas"></span></div>
+            <div id="salas" class="lista"></div>
+          </section>
+
+          <section class="tarjeta-club" aria-labelledby="t-vivo">
+            <div class="cabeza"><h2 id="t-vivo">Partidas en vivo</h2><span>Se pueden mirar sin interrumpir</span></div>
+            <div id="en-vivo" class="vivo"></div>
+          </section>
+
+          <section class="tarjeta-club" aria-labelledby="t-mesa">
+            <div class="cabeza"><h2 id="t-mesa">La mesa del club</h2><span>1 punto por victoria</span></div>
+            <div class="mesa-scroll">
+              <div class="mesa">
+                <div class="mesa-fila mesa-titulos"><span>#</span><span>Jugador</span><span>Partidas</span><span>Ganadas</span><span>Perdidas</span><span>Tablas</span><span>Puntos</span></div>
+                <div id="mesa"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col-lateral">
+          <section class="tarjeta-club" aria-labelledby="t-numeros">
+            <div class="cabeza"><h2 id="t-numeros">Tus números</h2></div>
+            <div class="numeros">
+              <div><span>Partidas</span><strong id="n-pj">0</strong></div>
+              <div><span>Victorias</span><strong id="n-g" class="dorado">0</strong></div>
+              <div><span>Derrotas</span><strong id="n-p">0</strong></div>
+              <div><span>Tablas</span><strong id="n-t">0</strong></div>
+            </div>
+            <div class="porcentaje">
+              <div class="porcentaje-fila"><span>Porcentaje de victorias</span><strong id="n-pct">0%</strong></div>
+              <div class="barra"><div id="n-barra"></div></div>
+              <p id="n-racha"></p>
+            </div>
+          </section>
+
+          <section class="tarjeta-club" aria-labelledby="t-linea">
+            <div class="cabeza"><h2 id="t-linea">En línea ahora</h2></div>
+            <div id="en-linea" class="en-linea"></div>
+          </section>
+        </div>
       </div>
     </section>
 
