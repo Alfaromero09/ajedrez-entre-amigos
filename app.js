@@ -156,6 +156,9 @@ async function entrar(usuario) {
   $("mi-nombre").textContent = nombres[yo];
   $("mi-icono").innerHTML = iconoSVG(avatares[yo] || usuario.user_metadata?.avatar);
   $("cabecera-usuario").classList.remove("oculto");
+  marcarConexion();
+  setInterval(marcarConexion, 4 * 60000);
+  cargarMiembros();
   escucharClub();
   const id = idDeLaUrl();
   if (id) abrirPartida(id);
@@ -230,6 +233,7 @@ async function cargarClub() {
   const mesa = mesaR.data || [];
   mesa.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; });
   pintarRivales(mesa);
+  cargarMiembros();
   const recientes = recientesR.data || [];
   await cargarNombres([...salasR.data || [], ...vivo, ...recientes].flatMap((x) => [x.blancas, x.negras]));
   // Solo partidas de jugadores con cuenta del club (las pruebas anónimas de la fase 1 no tienen nombre)
@@ -396,20 +400,25 @@ function estadoDe(id) {
 }
 
 function pintarEnLinea() {
-  const ids = Object.keys(enLinea);
-  $("cuenta-linea").textContent = ids.length ? `${ids.length} ${ids.length === 1 ? "conectado" : "conectados"}` : "";
-  if (!ids.length) {
-    $("en-linea").innerHTML = '<p class="vacio-club">Solo estás tú por ahora.</p>';
-    return;
-  }
-  ids.sort((a, b) => (a === yo ? -1 : b === yo ? 1 : (enLinea[a].jugando - enLinea[b].jugando) || (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || "")));
-  $("en-linea").innerHTML = ids.map((id) => {
+  const conectados = Object.keys(enLinea).sort((a, b) => (a === yo ? -1 : b === yo ? 1 : (enLinea[a].jugando - enLinea[b].jugando) || (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || "")));
+  const fuera = desconectados();
+  const total = Math.max(miembros.length, conectados.length + fuera.length);
+  $("cuenta-linea").textContent = `${conectados.length} de ${total} ${total === 1 ? "conectado" : "conectados"}`;
+  const filasOn = conectados.map((id) => {
     const u = enLinea[id];
     const lado = id === yo ? "" : u.jugando
       ? '<span class="ocupado">Ocupado</span>'
       : `<button class="btn-fila verde" data-retar="${id}" aria-label="Invitar a ${esc(u.nombre)} a jugar">${ICONO_TEL}Jugar</button>`;
     return `<div class="fila">${ficha(id, "punto-verde")}<div><strong>${esc(id === yo ? `${u.nombre} (tú)` : u.nombre)}</strong><small>${u.jugando ? "Jugando" : estadoDe(id)}</small></div>${lado}</div>`;
-  }).join("");
+  });
+  const soloYo = conectados.length <= 1;
+  $("en-linea").innerHTML =
+    `<h3 class="subtitulo"><span class="punto verde"></span>Conectados (${conectados.length})</h3>` +
+    (filasOn.join("") || "") +
+    (soloYo ? '<p class="vacio-club">Nadie más está conectado ahorita.</p>' : "") +
+    (fuera.length ? `<h3 class="subtitulo separado"><span class="punto gris"></span>Desconectados (${fuera.length})</h3>` +
+      fuera.map((m) => `<div class="fila apagada">${ficha(m.id)}<div><strong>${esc(m.nombre)}</strong><small>${vistoHace(m.ultima_vez)}</small></div>` +
+        `<button class="btn-fila fantasma" data-retar="${m.id}" aria-label="Apartarle una mesa a ${esc(m.nombre)}">Apartar mesa</button></div>`).join("") : "");
 }
 
 function pintarResumen() {
@@ -494,6 +503,31 @@ function actualizarPresencia() {
 }
 setInterval(() => { if (yo && !$("inicio").classList.contains("oculto")) { pintarSalas(ultimasSalas); } }, 60000);
 
+// ---------- Miembros del club y última conexión ----------
+let miembros = [];
+async function cargarMiembros() {
+  const { data } = await sb.from("perfiles").select("id, nombre, avatar, ultima_vez").order("nombre");
+  miembros = data || [];
+  miembros.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; });
+  if (!$("inicio").classList.contains("oculto")) pintarEnLinea();
+  if (partida && partida.estado === "esperando" && miColor() === "w") pintarLlamables();
+}
+function desconectados() {
+  return miembros.filter((m) => m.id !== yo && !enLinea[m.id])
+    .sort((a, b) => new Date(b.ultima_vez || 0) - new Date(a.ultima_vez || 0));
+}
+function vistoHace(fecha) {
+  if (!fecha) return "Sin conexión reciente";
+  const min = Math.max(0, Math.round((ahoraServidor() - new Date(fecha).getTime()) / 60000));
+  if (min < 5) return "Se fue hace un momento";
+  if (min < 60) return `Visto hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `Visto hace ${h} ${h === 1 ? "hora" : "horas"}`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "Visto ayer" : `Visto hace ${d} días`;
+}
+function marcarConexion() { sb.rpc("marcar_conexion").then(() => {}, () => {}); }
+
 // ---------- Elegir rival ----------
 function pintarRivales(mesa) {
   const sel = $("rival");
@@ -548,16 +582,9 @@ function enviar(evento, payload) {
 function pintarLlamables() {
   const apartada = partida && partida.reservada_para;
   const otros = Object.keys(enLinea).filter((id) => id !== yo && (!apartada || id === apartada));
-  if (apartada && !otros.length) {
-    $("llamables").innerHTML = `<p class="vacio">Mesa apartada para <strong>${esc(nombres[apartada] || "tu rival")}</strong>. Todavía no se conecta; cuando entre, verá tu mesa en su inicio.</p>`;
-    return;
-  }
-  if (!otros.length) {
-    $("llamables").innerHTML = '<p class="vacio">No hay nadie más conectado ahorita. Usa el link de abajo.</p>';
-    return;
-  }
   otros.sort((a, b) => (enLinea[a].jugando - enLinea[b].jugando) || enLinea[a].nombre.localeCompare(enLinea[b].nombre));
-  $("llamables").innerHTML = otros.map((id) => {
+  const fuera = desconectados().filter((m) => !apartada || m.id === apartada);
+  const filasOn = otros.map((id) => {
     const u = enLinea[id];
     const sonando = !!llamando[id];
     const boton = u.jugando
@@ -566,7 +593,13 @@ function pintarLlamables() {
         ? `<button class="llamar-btn sonando" data-colgar="${id}" aria-label="Cancelar llamada">${ICONO_TEL}Llamando…</button>`
         : `<button class="llamar-btn" data-llamar="${id}">${ICONO_TEL}Llamar</button>`;
     return `<div class="llamable">${ficha(id, "punto-verde")}<div><strong>${esc(u.nombre)}</strong><small>${u.jugando ? "En otra partida" : sonando ? "Sonando…" : "Conectado"}</small></div>${boton}</div>`;
-  }).join("");
+  });
+  const filasOff = fuera.map((m) =>
+    `<div class="llamable apagada">${ficha(m.id)}<div><strong>${esc(m.nombre)}</strong><small>${vistoHace(m.ultima_vez)}</small></div><span class="desconectado">Desconectado</span></div>`);
+  $("llamables").innerHTML =
+    `<h3 class="subtitulo"><span class="punto verde"></span>Conectados (${otros.length})</h3>` +
+    (filasOn.join("") || `<p class="vacio">${apartada ? `${esc(nombres[apartada] || "Tu rival")} todavía no se conecta; cuando entre, verá tu mesa en su inicio.` : "Nadie más está conectado ahorita. Usa el link de abajo."}</p>`) +
+    (filasOff.length ? `<h3 class="subtitulo separado"><span class="punto gris"></span>Desconectados (${filasOff.length})</h3>${filasOff.join("")}` : "");
 }
 
 $("llamables").addEventListener("click", (e) => {
