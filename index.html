@@ -116,6 +116,17 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .campo { display: flex; flex-direction: column; gap: 6px; }
 .campo label { font-size: 14px; color: var(--suave); }
 .campo input { height: 46px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); font: inherit; font-size: 16px; }
+.clave { position: relative; }
+.clave input { width: 100%; padding-right: 52px; }
+.ojo { position: absolute; right: 4px; top: 4px; width: 38px; height: 38px; border: 0; border-radius: 8px; background: transparent; color: var(--suave); display: grid; place-items: center; transition: color 160ms ease, background-color 160ms ease, transform 180ms var(--resorte); }
+.ojo:hover { color: var(--laton-claro); background: rgba(227,199,126,0.08); transform: none; }
+.ojo:active { transform: scale(0.92); }
+.ojo svg { width: 20px; height: 20px; }
+.campo input.no-coincide { border-color: #C9694F; }
+.campo input.coincide { border-color: rgba(205,165,78,0.7); }
+.nota { font-size: 13px; min-height: 18px; color: var(--suave); }
+.nota.mal { color: #E08A70; }
+.nota.bien { color: var(--laton-claro); }
 .enlace { background: none; border: 0; padding: 4px 0; color: var(--laton-claro); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; align-self: flex-start; }
 
 .tiempos { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -157,21 +168,22 @@ form { display: flex; flex-direction: column; gap: 16px; }
         <form id="form-registro" class="tarjeta">
           <h1>Crea tu cuenta</h1>
           <p>Necesitas el código de invitación del club.</p>
-          <div class="campo"><label for="r-nombre">Nombre de jugador</label><input id="r-nombre" type="text" minlength="2" maxlength="20" autocomplete="nickname" required></div>
+          <div class="campo"><label for="r-nombre">Nombre de jugador</label><input id="r-nombre" type="text" minlength="2" maxlength="20" autocomplete="off" required></div>
           <div class="campo"><label for="r-correo">Correo</label><input id="r-correo" type="email" autocomplete="email" required></div>
           <fieldset class="genero">
             <legend>Género</legend>
             <label><input type="radio" name="avatar" value="rey" checked><span class="avatar grande" id="icono-rey"></span>Hombre</label>
             <label><input type="radio" name="avatar" value="dama"><span class="avatar grande" id="icono-dama"></span>Mujer</label>
           </fieldset>
-          <div class="campo"><label for="r-clave">Contraseña</label><input id="r-clave" type="password" minlength="6" autocomplete="new-password" required></div>
+          <div class="campo"><label for="r-clave">Contraseña</label><div class="clave"><input id="r-clave" type="password" minlength="6" autocomplete="new-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
+          <div class="campo"><label for="r-clave2">Confirma tu contraseña</label><div class="clave"><input id="r-clave2" type="password" minlength="6" autocomplete="new-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div><span class="nota" id="nota-clave" aria-live="polite"></span></div>
           <div class="campo"><label for="r-codigo">Código de invitación</label><input id="r-codigo" type="text" autocomplete="off" required></div>
           <button class="primario" type="submit">Crear cuenta</button>
         </form>
         <form id="form-entrar" class="tarjeta">
           <h1>Ya soy del club</h1>
           <div class="campo"><label for="e-correo">Correo</label><input id="e-correo" type="email" autocomplete="email" required></div>
-          <div class="campo"><label for="e-clave">Contraseña</label><input id="e-clave" type="password" autocomplete="current-password" required></div>
+          <div class="campo"><label for="e-clave">Contraseña</label><div class="clave"><input id="e-clave" type="password" autocomplete="current-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
           <button class="primario" type="submit">Entrar</button>
         </form>
       </div>

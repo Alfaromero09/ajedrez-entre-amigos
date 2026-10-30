@@ -57,6 +57,35 @@ const nombreDe = (id) => (id === yo ? "Tú" : nombres[id] || "Jugador");
 $("icono-rey").innerHTML = iconoSVG("rey");
 $("icono-dama").innerHTML = iconoSVG("dama");
 
+// ---------- Contraseñas: ojito y confirmación ----------
+const OJO_ABIERTO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const OJO_CERRADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+document.querySelectorAll(".ojo").forEach((b) => {
+  b.innerHTML = OJO_ABIERTO;
+  b.addEventListener("click", () => {
+    const input = b.previousElementSibling;
+    const ver = input.type === "password";
+    input.type = ver ? "text" : "password";
+    b.innerHTML = ver ? OJO_CERRADO : OJO_ABIERTO;
+    b.setAttribute("aria-pressed", String(ver));
+    b.setAttribute("aria-label", ver ? "Ocultar contraseña" : "Mostrar contraseña");
+    input.focus();
+  });
+});
+function revisarClaves() {
+  const a = $("r-clave").value, b = $("r-clave2").value, nota = $("nota-clave");
+  $("r-clave2").classList.remove("coincide", "no-coincide");
+  nota.className = "nota"; nota.textContent = "";
+  if (!b) return true;
+  const ok = a === b;
+  $("r-clave2").classList.add(ok ? "coincide" : "no-coincide");
+  nota.classList.add(ok ? "bien" : "mal");
+  nota.textContent = ok ? "Las contraseñas coinciden." : "Las contraseñas no coinciden.";
+  return ok;
+}
+$("r-clave").addEventListener("input", revisarClaves);
+$("r-clave2").addEventListener("input", revisarClaves);
+
 $("form-entrar").addEventListener("submit", async (e) => {
   e.preventDefault();
   const { data, error } = await sb.auth.signInWithPassword({
@@ -74,6 +103,7 @@ $("form-registro").addEventListener("submit", async (e) => {
   e.preventDefault();
   const nombre = $("r-nombre").value.trim();
   if (nombre.length < 2) return avisar("El nombre debe tener al menos 2 letras.");
+  if ($("r-clave").value !== $("r-clave2").value) { revisarClaves(); $("r-clave2").focus(); return avisar("Las dos contraseñas no coinciden."); }
   const { data: libre } = await sb.rpc("nombre_disponible", { n: nombre });
   if (libre === false) return avisar("Ese nombre ya lo usa alguien del club. Prueba otro.");
   const { data, error } = await sb.auth.signUp({
@@ -96,6 +126,7 @@ $("form-registro").addEventListener("submit", async (e) => {
   }
   if (!data.session) {
     e.target.reset();
+    revisarClaves();
     return avisar("Listo. Te mandamos un correo: abre el enlace para confirmar tu cuenta y luego entra.");
   }
   entrar(data.user);
