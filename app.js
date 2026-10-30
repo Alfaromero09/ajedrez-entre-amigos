@@ -213,11 +213,12 @@ async function cargarClub() {
   if (!yo) return;
   saludar();
   const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const [salasR, vivoR, mesaR, mioR] = await Promise.all([
+  const [salasR, vivoR, mesaR, mioR, recientesR] = await Promise.all([
     sb.from("partidas").select("id, blancas, minutos, creada").eq("estado", "esperando").gte("creada", desde).order("creada", { ascending: false }).limit(30),
     sb.from("partidas").select("id, blancas, negras, minutos, jugadas, actualizada, fen, reloj_blancas, reloj_negras, ultimo_tick").eq("estado", "jugando").order("actualizada", { ascending: false }).limit(20),
     sb.rpc("mesa_del_club"),
-    sb.from("partidas").select("blancas, negras, resultado").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).or(`blancas.eq.${yo},negras.eq.${yo}`).order("actualizada", { ascending: false }).limit(50),
+    sb.from("partidas").select("id, blancas, negras, resultado, motivo, minutos, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).or(`blancas.eq.${yo},negras.eq.${yo}`).order("actualizada", { ascending: false }).limit(50),
+    sb.from("partidas").select("id, blancas, negras, resultado, motivo, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).order("actualizada", { ascending: false }).limit(6),
   ]);
   const salas = salasR.data || [];
   // Fuera las que ya se quedaron sin tiempo aunque nadie lo haya reclamado
@@ -228,7 +229,8 @@ async function cargarClub() {
   });
   const mesa = mesaR.data || [];
   mesa.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; });
-  await cargarNombres([...salasR.data || [], ...vivo].flatMap((x) => [x.blancas, x.negras]));
+  const recientes = recientesR.data || [];
+  await cargarNombres([...salasR.data || [], ...vivo, ...recientes].flatMap((x) => [x.blancas, x.negras]));
   // Solo partidas de jugadores con cuenta del club (las pruebas anónimas de la fase 1 no tienen nombre)
   const conCuenta = (id) => !!nombres[id];
   ultimasSalas = salas.filter((x) => conCuenta(x.blancas));
@@ -240,6 +242,55 @@ async function cargarClub() {
   pintarNumeros(mesa.find((m) => m.id === yo), mioR.data || []);
   pintarResumen();
   pintarEnLinea();
+  pintarResultados(recientes);
+  pintarUltimo((mioR.data || [])[0]);
+}
+
+const CORONA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="#2A1C0C"/></svg>';
+const MANOS = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#FFF4EC" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/><path d="M5 8h14" opacity="0.5"/><path d="M5 16h14" opacity="0.5"/></svg>';
+const COPA = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="#2A1C0C"><path d="M7 3h10v3h3a3 3 0 0 1-3 4.6A5 5 0 0 1 13 14v3h3v3H8v-3h3v-3a5 5 0 0 1-4-3.4A3 3 0 0 1 4 6h3zm-1 5a1 1 0 0 0 1 .9V6H6zm11 .9a1 1 0 0 0 1-.9V6h-1z"/></svg>';
+const porQue = (m) => ({ "jaque mate": "por jaque mate", tiempo: "por tiempo", abandono: "por abandono", tablas: "en tablas" })[m] || "";
+
+function hacePoco(fecha) {
+  const min = Math.max(0, Math.round((ahoraServidor() - new Date(fecha).getTime()) / 60000));
+  if (min < 1) return "hace un momento";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `hace ${h} ${h === 1 ? "hora" : "horas"}`;
+  const d = Math.round(h / 24);
+  return `hace ${d} ${d === 1 ? "día" : "días"}`;
+}
+
+function pintarResultados(lista) {
+  if (!lista.length) {
+    $("resultados").innerHTML = '<p class="vacio-club">Aquí aparecerán las victorias del club.</p>';
+    return;
+  }
+  $("resultados").innerHTML = lista.map((x) => {
+    const n = (id) => esc(id === yo ? "Tú" : nombres[id] || "Jugador");
+    if (x.resultado === "½-½") {
+      return `<div class="resultado"><span class="corona tablas">${MANOS}</span><div><strong>${n(x.blancas)} y ${n(x.negras)} hicieron tablas</strong><small>${hacePoco(x.actualizada)}</small></div></div>`;
+    }
+    const g = x.resultado === "1-0" ? x.blancas : x.negras;
+    const p = x.resultado === "1-0" ? x.negras : x.blancas;
+    const verbo = g === yo ? "ganaste a" : "le ganó a";
+    return `<div class="resultado"><span class="corona">${CORONA}</span><div><strong><b>${n(g)}</b> ${verbo} ${n(p)}</strong><small>${porQue(x.motivo)} · ${hacePoco(x.actualizada)}</small></div></div>`;
+  }).join("");
+}
+
+function pintarUltimo(x) {
+  const caja = $("ultimo");
+  const reciente = x && ahoraServidor() - new Date(x.actualizada).getTime() < 6 * 3600 * 1000;
+  if (!reciente || x.resultado === "½-½") return caja.classList.add("oculto");
+  const yoBlancas = x.blancas === yo;
+  const gane = (yoBlancas && x.resultado === "1-0") || (!yoBlancas && x.resultado === "0-1");
+  const rival = esc(nombres[yoBlancas ? x.negras : x.blancas] || "tu rival");
+  caja.classList.toggle("perdi", !gane);
+  caja.innerHTML = `<span class="sello-copa">${gane ? COPA : CORONA.replace("#2A1C0C", "#F3EADA")}</span>
+    <div class="ultimo-texto"><strong>${gane ? `¡Ganaste tu última partida contra ${rival}!` : `${rival} ganó la última, ${porQue(x.motivo)}.`}</strong>
+    <span>${gane ? `Fue ${porQue(x.motivo)}, ${hacePoco(x.actualizada)}. Sumas un punto en la mesa del club.` : "Pídele la revancha: crea una partida y mándale el link."}</span></div>
+    ${gane ? "" : `<button class="primario" data-revancha="${x.minutos || 10}">Revancha de ${textoTiempo(x.minutos || 10)}</button>`}`;
+  caja.classList.remove("oculto");
 }
 
 function pintarSalas(salas) {
@@ -357,6 +408,11 @@ $("inicio").addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.dataset.abrir) return irAPartida(b.dataset.abrir);
+  if (b.dataset.revancha) {
+    const { data, error } = await sb.rpc("crear_partida", { p_minutos: Number(b.dataset.revancha) });
+    if (error) return avisar("No se pudo crear la partida. Intenta de nuevo.");
+    return irAPartida(data);
+  }
   if (b.dataset.unirse) {
     b.disabled = true;
     const { error } = await sb.rpc("unirse_partida", { p: b.dataset.unirse });
@@ -485,6 +541,7 @@ function textoFinal() {
 }
 
 // ---------- Reloj ----------
+const avisosTiempo = new Set();
 function restantes() {
   let w = Number(partida.reloj_blancas);
   let b = Number(partida.reloj_negras);
@@ -513,7 +570,17 @@ function actualizarRelojes() {
     if (!el) continue;
     el.textContent = formato(r[c]);
     el.classList.toggle("activo", partida.estado === "jugando" && turno === c);
-    el.classList.toggle("poco", r[c] < 20000);
+    const total = (partida.minutos || 10) * 60000;
+    const umbral = Math.min(30000, total * 0.15);
+    el.classList.toggle("poco", partida.estado === "jugando" && r[c] < umbral);
+    el.classList.toggle("critico", partida.estado === "jugando" && r[c] < 10000);
+    const barra = $(`barra-${c}`);
+    if (barra) barra.style.transform = `scaleX(${Math.min(1, r[c] / total)})`;
+    // Aviso único cuando a mí me queda poco
+    if (c === miColor() && partida.estado === "jugando" && r[c] < umbral && r[c] > 0 && !avisosTiempo.has(partida.id)) {
+      avisosTiempo.add(partida.id);
+      avisar(`¡Ojo! Te quedan ${Math.ceil(r[c] / 1000)} segundos.`);
+    }
   }
   const color = miColor();
   if (partida.estado === "jugando" && color && r[turno] <= 0 && !reclamando) {
@@ -529,6 +596,157 @@ function actualizarRelojes() {
   }
 }
 setInterval(actualizarRelojes, 250);
+
+// ---------- Material y HUD ----------
+const VALOR = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const INICIAL = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+function contarMaterial(juego) {
+  const hay = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+  const material = { w: 0, b: 0 };
+  for (const fila of juego.board()) for (const c of fila) {
+    if (!c || c.type === "k") continue;
+    hay[c.color][c.type]++;
+    material[c.color] += VALOR[c.type];
+  }
+  // capturas[c] = piezas del rival que "c" se comió
+  const capturas = { w: [], b: [] };
+  for (const t of ["q", "r", "b", "n", "p"]) {
+    for (let i = 0; i < Math.max(0, INICIAL[t] - hay.b[t]); i++) capturas.w.push(t);
+    for (let i = 0; i < Math.max(0, INICIAL[t] - hay.w[t]); i++) capturas.b.push(t);
+  }
+  return { capturas, material };
+}
+
+function pintarHud(juego, color, turno, material) {
+  const chips = [];
+  const n = Math.floor(partida.jugadas.length / 2) + 1;
+  if (partida.estado === "jugando") {
+    chips.push(`<span>Jugada ${n}</span>`);
+    if (juego.inCheck()) chips.push(`<span class="alerta">¡Jaque!</span>`);
+    const dif = material.w - material.b;
+    chips.push(`<span>${dif === 0 ? "Material parejo" : `${dif > 0 ? "Blancas" : "Negras"} +${Math.abs(dif)}`}</span>`);
+  } else if (partida.estado === "terminada" && partida.jugadas.length) {
+    chips.push(`<span>${partida.jugadas.length} jugadas en total</span>`);
+  }
+  $("hud").innerHTML = chips.join("");
+}
+
+// ---------- Celebración de fin de partida ----------
+const estadoVisto = {};
+const celebradas = new Set();
+const MOTIVO = { "jaque mate": "por jaque mate", tiempo: "por tiempo", abandono: "por abandono", tablas: "" };
+
+function revisarFinal() {
+  const antes = estadoVisto[partida.id];
+  estadoVisto[partida.id] = partida.estado;
+  if (partida.estado !== "terminada" || !partida.resultado || !partida.negras || celebradas.has(partida.id)) return;
+  const reciente = ahoraServidor() - new Date(partida.actualizada).getTime() < 3 * 60000;
+  if (antes === "jugando" || (antes === undefined && reciente)) {
+    celebradas.add(partida.id);
+    celebrar();
+  }
+}
+
+function medallaSVG(colorRey, apagada) {
+  const a = apagada ? "#9B7A5C" : "#F3D98E", b = apagada ? "#5C3B24" : "#B8862F", c = apagada ? "#3A281C" : "#7A5520";
+  const puntos = Array.from({ length: 24 }, (_, i) => {
+    const ang = (i / 24) * Math.PI * 2;
+    return `<circle cx="${60 + Math.cos(ang) * 50}" cy="${60 + Math.sin(ang) * 50}" r="2.2" fill="${a}" opacity="0.9"/>`;
+  }).join("");
+  return `<svg viewBox="0 0 120 120"><defs><radialGradient id="mg" cx="40%" cy="32%" r="75%"><stop offset="0" stop-color="${a}"/><stop offset="0.55" stop-color="${b}"/><stop offset="1" stop-color="${c}"/></radialGradient></defs>` +
+    `<circle cx="60" cy="60" r="58" fill="url(#mg)"/><circle cx="60" cy="60" r="44" fill="none" stroke="${c}" stroke-opacity="0.55" stroke-width="2"/>${puntos}` +
+    `<g transform="translate(36 28) scale(1.2)">${piezaSVG("k", colorRey).replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}</g></svg>`;
+}
+
+function celebrar() {
+  const color = miColor();
+  const tablas = partida.resultado === "½-½";
+  const gana = partida.resultado === "1-0" ? "w" : "b";
+  const ganador = gana === "w" ? partida.blancas : partida.negras;
+  const perdedor = gana === "w" ? partida.negras : partida.blancas;
+  const yoGane = !tablas && color === gana;
+  const yoPerdi = !tablas && color && color !== gana;
+  const motivo = MOTIVO[partida.motivo] ?? "";
+  const final = $("final");
+  final.classList.toggle("derrota", yoPerdi || tablas);
+
+  let titulo, texto, a, b, colorRey;
+  if (tablas) {
+    titulo = "Tablas"; colorRey = "w";
+    texto = `Nadie cedió. <strong>${esc(nombres[partida.blancas] || "Blancas")}</strong> y <strong>${esc(nombres[partida.negras] || "Negras")}</strong> quedan a mano.`;
+    a = "Mano a mano"; b = "½";
+  } else if (yoGane) {
+    titulo = "¡Victoria!"; colorRey = gana;
+    texto = `Le ganaste a <strong>${esc(nombres[perdedor] || "tu rival")}</strong> ${motivo}.`;
+    a = partida.motivo === "jaque mate" ? "¡Jaque mate!" : partida.motivo === "tiempo" ? "¡Al filo del reloj!" : "¡Se rindió!";
+    b = "+1<br>punto";
+  } else if (yoPerdi) {
+    titulo = "Derrota"; colorRey = gana;
+    texto = `<strong>${esc(nombres[ganador] || "Tu rival")}</strong> se llevó esta ${motivo}. La revancha está a un clic.`;
+    a = "Bien jugado"; b = "Otra<br>vez";
+  } else {
+    titulo = `¡Ganó ${esc(nombres[ganador] || "")}!`; colorRey = gana;
+    texto = `Venció a <strong>${esc(nombres[perdedor] || "su rival")}</strong> ${motivo}.`;
+    a = partida.motivo === "jaque mate" ? "¡Jaque mate!" : "¡Victoria!"; b = "+1<br>punto";
+  }
+  $("final-titulo").innerHTML = titulo;
+  $("final-texto").innerHTML = texto;
+  $("final-medalla").innerHTML = medallaSVG(colorRey, yoPerdi);
+  $("sticker-a").textContent = a;
+  $("sticker-b").innerHTML = b;
+  $("sticker-c").innerHTML = piezaSVG(yoPerdi ? "p" : tablas ? "n" : "q", colorRey);
+  const jug = Math.ceil(partida.jugadas.length / 2);
+  const r = restantes();
+  const datos = [`${jug} ${jug === 1 ? "jugada" : "jugadas"}`, `Partida de ${textoTiempo(partida.minutos || 10)}`];
+  if (color && !tablas) datos.push(`Te sobró ${formato(r[color])}`);
+  $("final-datos").innerHTML = datos.map((d) => `<span>${d}</span>`).join("");
+  $("final-revancha").classList.toggle("oculto", !color);
+  // reiniciar animaciones
+  final.classList.add("oculto"); void final.offsetWidth; final.classList.remove("oculto");
+  $("final-revancha").focus({ preventScroll: true });
+  if (!yoPerdi) lanzarConfeti(tablas ? 70 : 180);
+}
+
+$("final-tablero").addEventListener("click", cerrarFinal);
+$("final").addEventListener("click", (e) => { if (e.target.id === "final") cerrarFinal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("final").classList.contains("oculto")) cerrarFinal(); });
+function cerrarFinal() { $("final").classList.add("oculto"); confeti = []; }
+$("final-revancha").addEventListener("click", async () => {
+  const { data, error } = await sb.rpc("crear_partida", { p_minutos: partida.minutos || 10 });
+  if (error) return avisar("No se pudo crear la partida. Intenta de nuevo.");
+  cerrarFinal();
+  irAPartida(data);
+  avisar("Mesa nueva lista. Copia el link y mándaselo a tu rival.");
+});
+
+let confeti = [];
+function lanzarConfeti(cuantas) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const lienzo = $("confeti");
+  const ctx = lienzo.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  lienzo.width = innerWidth * dpr; lienzo.height = innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const colores = ["#CDA54E", "#E3C77E", "#F3EADA", "#C9603F", "#8A5E3C", "#FFF4DE"];
+  confeti = Array.from({ length: cuantas }, () => ({
+    x: innerWidth / 2 + (Math.random() - 0.5) * 160, y: innerHeight * 0.42,
+    vx: (Math.random() - 0.5) * 16, vy: -Math.random() * 15 - 5,
+    w: 6 + Math.random() * 7, h: 4 + Math.random() * 5, giro: Math.random() * 6, vg: (Math.random() - 0.5) * 0.35,
+    color: colores[(Math.random() * colores.length) | 0], vida: 0,
+  }));
+  const paso = () => {
+    if (!confeti.length) return ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const c of confeti) {
+      c.vy += 0.32; c.vx *= 0.985; c.x += c.vx; c.y += c.vy; c.giro += c.vg; c.vida++;
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.giro); ctx.scale(1, Math.cos(c.vida * 0.12));
+      ctx.fillStyle = c.color; ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h); ctx.restore();
+    }
+    confeti = confeti.filter((c) => c.y < innerHeight + 40);
+    requestAnimationFrame(paso);
+  };
+  requestAnimationFrame(paso);
+}
 
 // ---------- Dibujo ----------
 function dibujar() {
@@ -556,12 +774,16 @@ function dibujar() {
     else estado.textContent = `${jaque}${turno === color ? "Tu turno." : `Turno de ${nombreDe(turno === "w" ? partida.blancas : partida.negras)}.`}`;
   }
 
+  const { capturas, material } = contarMaterial(juego);
   const tira = (c) => {
     const id = c === "w" ? partida.blancas : partida.negras;
     const nombre = id ? nombreDe(id) : "Lugar libre";
     const icono = id ? `<span class="avatar">${iconoSVG(avatares[id])}</span>` : "";
-    return `<div>${icono}<div><strong>${esc(nombre)}</strong><small>${c === "w" ? "Blancas" : "Negras"}</small></div></div>` +
-      `<span class="reloj" id="reloj-${c}">--:--</span>`;
+    const capt = capturas[c].map((t) => piezaSVG(t, c === "w" ? "b" : "w")).join("");
+    const ventaja = material[c] > material[c === "w" ? "b" : "w"] ? `<span class="ventaja">+${material[c] - material[c === "w" ? "b" : "w"]}</span>` : "";
+    return `<div>${icono}<div class="lado"><strong>${esc(nombre)}</strong><small>${c === "w" ? "Blancas" : "Negras"}</small>` +
+      `<span class="capturas" aria-label="Piezas capturadas">${capt}${ventaja}</span></div></div>` +
+      `<span class="reloj-caja"><span class="reloj" id="reloj-${c}">--:--</span><span class="reloj-barra"><i id="barra-${c}"></i></span></span>`;
   };
   $("arriba").innerHTML = tira(volteado ? "w" : "b");
   $("abajo").innerHTML = tira(volteado ? "b" : "w");
@@ -582,6 +804,13 @@ function dibujar() {
       if (elegida === casilla) btn.classList.add("elegida");
       if (destinos().includes(casilla)) btn.classList.add("destino");
       if (pieza) btn.classList.add("ocupada");
+      if (pieza && pieza.type === "k") {
+        if (jugando && juego.inCheck() && pieza.color === turno) btn.classList.add("jaque");
+        if (partida.estado === "terminada" && partida.resultado && partida.resultado !== "½-½") {
+          const gana = partida.resultado === "1-0" ? "w" : "b";
+          btn.classList.add(pieza.color === gana ? "rey-ganador" : "rey-vencido");
+        }
+      }
       if (puedoMover && ((pieza && pieza.color === color) || destinos().includes(casilla))) btn.classList.add("jugable");
       btn.setAttribute("aria-label", casilla + (pieza ? "" : ", vacía"));
       if (pieza) {
@@ -596,6 +825,9 @@ function dibujar() {
   }
   aplicarAngulo();
   actualizarRelojes();
+  pintarHud(juego, color, turno, material);
+  estado.classList.toggle("cierre", partida.estado === "terminada");
+  revisarFinal();
 
   const lista = $("jugadas");
   lista.innerHTML = "";

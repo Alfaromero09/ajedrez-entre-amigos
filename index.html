@@ -232,6 +232,98 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .opciones-coronar svg { width: 100%; height: auto; display: block; }
 
 #aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 12px 20px; border-radius: 12px; background: #3A281C; border: 1px solid rgba(227,199,126,0.32); box-shadow: var(--sombra-2); }
+
+/* ---------- Fin de partida ---------- */
+.final { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px;
+  background: radial-gradient(60% 50% at 50% 42%, rgba(205,165,78,0.22), transparent 70%), rgba(15, 9, 5, 0.72);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: aparecer 280ms ease-out both; }
+.final.derrota { background: radial-gradient(60% 50% at 50% 42%, rgba(140,94,60,0.18), transparent 70%), rgba(15, 9, 5, 0.78); }
+#confeti { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; pointer-events: none; }
+.final-tarjeta { position: relative; width: 100%; max-width: 600px; padding: 88px 40px 36px; border-radius: 28px; text-align: center;
+  background: radial-gradient(120% 70% at 50% 0%, rgba(227,199,126,0.20), transparent 60%), linear-gradient(180deg, #3A281C, #2A1C13);
+  border: 1px solid rgba(227,199,126,0.38);
+  box-shadow: 0 2px 4px rgba(10,6,3,0.45), 0 30px 70px rgba(10,6,3,0.55), 0 0 0 8px rgba(205,165,78,0.06);
+  display: flex; flex-direction: column; align-items: center; gap: 12px; animation: subir 620ms var(--resorte) both; }
+.final.derrota .final-tarjeta { border-color: rgba(233,220,195,0.14); background: linear-gradient(180deg, #33241A, #241810); }
+.final h1 { font-size: 72px; line-height: 1; letter-spacing: -0.04em; color: #FFF4DE; text-shadow: 0 2px 0 rgba(10,6,3,0.4), 0 0 40px rgba(227,199,126,0.35); }
+.final.derrota h1 { color: var(--texto); text-shadow: none; font-size: 60px; }
+.final p { margin: 0; font-size: 18px; line-height: 1.6; color: var(--suave); max-width: 38ch; }
+.final p strong { color: var(--texto); font-weight: 600; }
+.medalla { position: absolute; left: 50%; top: 0; width: 132px; height: 132px; transform: translate(-50%, -50%); animation: medalla 900ms var(--resorte) 120ms both; }
+.medalla svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 10px 18px rgba(10,6,3,0.5)); }
+.final-datos { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+.final-datos span { padding: 6px 12px; border-radius: 999px; background: rgba(10,6,3,0.28); border: 1px solid rgba(233,220,195,0.10); font-size: 14px; color: #E2D3B8; font-variant-numeric: tabular-nums; }
+.final-botones { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 16px; }
+.final-club { display: inline-flex; align-items: center; text-decoration: none; }
+.final-club:hover { background-color: #3A281C; }
+
+.sticker { position: absolute; display: grid; place-items: center; font-family: "Fraunces", serif; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap;
+  box-shadow: 0 0 0 4px #FBF1DC, 0 6px 14px rgba(10,6,3,0.45), 0 18px 30px rgba(10,6,3,0.25);
+  animation: pegar 520ms var(--resorte) both; }
+.sticker:empty { display: none; }
+.sticker-cinta { top: 30px; left: -26px; padding: 10px 18px; border-radius: 12px; background: #C9603F; color: #FFF4EC; font-size: 22px; transform: rotate(-9deg); animation-delay: 420ms; }
+.sticker-circulo { top: 38px; right: -22px; width: 92px; height: 92px; border-radius: 50%; background: var(--laton); color: var(--tinta); font-size: 21px; line-height: 1.05; text-align: center; transform: rotate(12deg); animation-delay: 560ms; }
+.sticker-ficha { bottom: -26px; right: 36px; width: 70px; height: 70px; border-radius: 50%; background: #F2E6CF; transform: rotate(-14deg); animation-delay: 700ms; }
+.sticker-ficha svg { width: 64%; height: auto; }
+.final.derrota .sticker-cinta { background: #5C3B24; }
+.final.derrota .sticker-circulo { background: #8A5E3C; color: #FFF4EC; }
+
+@keyframes aparecer { from { opacity: 0; } to { opacity: 1; } }
+@keyframes subir { from { opacity: 0; transform: translateY(40px) scale(0.94); } to { opacity: 1; transform: none; } }
+@keyframes medalla { 0% { opacity: 0; transform: translate(-50%, -110%) scale(0.4) rotate(-200deg); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); } }
+@keyframes pegar { 0% { opacity: 0; scale: 1.7; } 60% { opacity: 1; scale: 0.92; } 100% { opacity: 1; scale: 1; } }
+
+/* ---------- Durante la partida ---------- */
+.lado { display: flex; flex-direction: column; gap: 2px; }
+.capturas { display: flex; align-items: center; gap: 0; min-height: 18px; }
+.capturas svg { width: 15px; height: 19px; margin-right: -4px; }
+.ventaja { margin-left: 10px; padding: 1px 7px; border-radius: 6px; background: rgba(205,165,78,0.16); color: var(--laton-claro); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.reloj-caja { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.reloj-barra { height: 3px; border-radius: 2px; background: rgba(233,220,195,0.10); overflow: hidden; }
+.reloj-barra i { display: block; height: 100%; background: var(--laton); transform-origin: left center; transition: transform 250ms linear; }
+.reloj.poco { color: #F0B49E; }
+.reloj.poco.activo { animation: latido 1s ease-in-out infinite; }
+.reloj.critico.activo { animation-duration: 0.5s; }
+.reloj-caja:has(.reloj.poco) .reloj-barra i { background: #C9603F; }
+@keyframes latido { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.hud { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 600px; }
+.hud span { padding: 4px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--linea); color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
+.hud span.alerta { background: rgba(201,96,63,0.18); border-color: rgba(201,96,63,0.45); color: #F0B49E; }
+.casilla.jaque { box-shadow: inset 0 0 0 3px #C9603F, inset 0 0 24px rgba(201,96,63,0.65); }
+.casilla.rey-ganador { box-shadow: inset 0 0 0 3px var(--laton-claro), inset 0 0 26px rgba(227,199,126,0.75); }
+.casilla.rey-vencido { box-shadow: inset 0 0 0 3px #8F3B25, inset 0 0 26px rgba(143,59,37,0.7); }
+#estado.cierre { font-family: "Fraunces", serif; font-size: 22px; line-height: 1.3; color: var(--laton-claro); }
+
+/* ---------- Dashboard: resultados ---------- */
+.ultimo { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding: 22px 24px 22px 104px; border-radius: 20px; overflow: visible;
+  background: radial-gradient(80% 140% at 0% 50%, rgba(227,199,126,0.28), transparent 60%), #3A281C;
+  border: 1px solid rgba(227,199,126,0.4); box-shadow: var(--sombra-2); }
+.ultimo.perdi { background: #33241A; border-color: var(--linea); box-shadow: var(--sombra-1); }
+.ultimo .sello-copa { position: absolute; left: 20px; top: 50%; width: 68px; height: 68px; border-radius: 50%; background: var(--laton); display: grid; place-items: center; transform: translateY(-50%) rotate(-8deg);
+  box-shadow: 0 0 0 4px #FBF1DC, 0 8px 18px rgba(10,6,3,0.45); }
+.ultimo.perdi .sello-copa { background: #8A5E3C; }
+.ultimo .sello-copa svg { width: 60%; height: auto; }
+.ultimo-texto { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; }
+.ultimo-texto strong { font-family: "Fraunces", serif; font-weight: 500; font-size: 26px; letter-spacing: -0.02em; line-height: 1.2; }
+.ultimo-texto span { color: #CDBB9F; font-size: 15px; }
+.resultados { display: flex; flex-direction: column; }
+.resultado { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(233,220,195,0.06); }
+.resultado:first-child { border-top: 0; }
+.resultado > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.resultado strong { font-size: 15px; font-weight: 500; line-height: 1.4; }
+.resultado strong b { color: var(--laton-claro); font-weight: 600; }
+.resultado small { font-size: 13px; color: var(--suave); }
+.corona { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--laton); display: grid; place-items: center; transform: rotate(-8deg); box-shadow: 0 0 0 3px #FBF1DC, 0 4px 10px rgba(10,6,3,0.4); }
+.corona svg { width: 62%; height: auto; }
+.corona.tablas { background: #8A5E3C; }
+@media (max-width: 640px) {
+  .final-tarjeta { padding: 80px 24px 28px; }
+  .final h1 { font-size: 54px; }
+  .sticker-cinta { left: -8px; font-size: 18px; }
+  .sticker-circulo { right: -6px; width: 78px; height: 78px; font-size: 18px; }
+  .ultimo { padding-left: 96px; }
+}
+@media (prefers-reduced-motion: reduce) { .final, .final-tarjeta, .medalla, .sticker, .reloj.poco.activo { animation: none !important; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -292,6 +384,8 @@ form { display: flex; flex-direction: column; gap: 16px; }
         </div>
       </div>
 
+      <div id="ultimo" class="ultimo oculto"></div>
+
       <div id="armar" class="tarjeta-club armar">
         <div class="cabeza"><h2>Nueva partida</h2><span>Quien se una se sienta con las negras</span></div>
         <div class="armar-fila">
@@ -332,6 +426,11 @@ form { display: flex; flex-direction: column; gap: 16px; }
         </div>
 
         <div class="col-lateral">
+          <section class="tarjeta-club" aria-labelledby="t-resultados">
+            <div class="cabeza"><h2 id="t-resultados">Resultados recientes</h2></div>
+            <div id="resultados" class="resultados"></div>
+          </section>
+
           <section class="tarjeta-club" aria-labelledby="t-numeros">
             <div class="cabeza"><h2 id="t-numeros">Tus números</h2></div>
             <div class="numeros">
@@ -358,6 +457,7 @@ form { display: flex; flex-direction: column; gap: 16px; }
     <section id="partida" class="oculto">
       <div class="zona-tablero">
         <div class="jugador" id="arriba"></div>
+        <div class="hud" id="hud" aria-live="polite"></div>
         <div class="escena"><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div></div>
         <div class="jugador" id="abajo"></div>
         <div class="barra-vista">
@@ -387,6 +487,23 @@ form { display: flex; flex-direction: column; gap: 16px; }
     <h1 id="coronar-titulo" style="font-size:26px">Elige tu nueva pieza</h1>
     <div class="opciones-coronar" id="opciones-coronar"></div>
     <button class="secundario" id="coronar-cancelar">Cancelar</button>
+  </div>
+</div>
+<div id="final" class="final oculto" role="dialog" aria-modal="true" aria-labelledby="final-titulo">
+  <canvas id="confeti" aria-hidden="true"></canvas>
+  <div class="final-tarjeta" id="final-tarjeta">
+    <div class="medalla" id="final-medalla" aria-hidden="true"></div>
+    <span class="sticker sticker-cinta" id="sticker-a"></span>
+    <span class="sticker sticker-circulo" id="sticker-b"></span>
+    <span class="sticker sticker-ficha" id="sticker-c" aria-hidden="true"></span>
+    <h1 id="final-titulo">¡Victoria!</h1>
+    <p id="final-texto"></p>
+    <div class="final-datos" id="final-datos"></div>
+    <div class="final-botones">
+      <button class="primario" id="final-revancha">Jugar otra</button>
+      <button class="secundario" id="final-tablero">Ver el tablero</button>
+      <a class="secundario final-club" href="./">Volver al club</a>
+    </div>
   </div>
 </div>
 <div id="aviso" role="status" class="oculto"></div>
