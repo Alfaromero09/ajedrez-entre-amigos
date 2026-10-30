@@ -179,7 +179,12 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .jugador .turno { padding: 6px 12px; border-radius: 8px; background: var(--panel); color: var(--suave); font-size: 14px; }
 .jugador .turno.activo { background: var(--laton); color: var(--tinta); font-weight: 600; }
 
-.escena { width: 100%; max-width: 600px; perspective: 1100px; perspective-origin: 50% 0%; padding-top: 12px; }
+.escena { width: 100%; max-width: 680px; perspective: 1100px; perspective-origin: 50% 0%; padding: 44px 40px 36px; border-radius: 28px;
+  /* Mesa más clara alrededor del tablero para que las piezas oscuras resalten */
+  background: radial-gradient(90% 75% at 50% 42%, #8A6B4E 0%, #6E533B 45%, #4E3A28 100%);
+  border: 1px solid rgba(233,220,195,0.14);
+  box-shadow: inset 0 1px 0 rgba(255,240,215,0.14), inset 0 -24px 48px rgba(20,12,6,0.28), 0 2px 4px rgba(10,6,3,0.4), 0 18px 40px rgba(10,6,3,0.35); }
+@media (max-width: 640px) { .escena { padding: 28px 16px 22px; border-radius: 20px; } }
 .marco { background: #4A2F1C; padding: 12px; border-radius: 14px; transform-origin: 50% 100%; transform-style: preserve-3d; box-shadow: var(--sombra-2); transition: transform 200ms var(--resorte); }
 .tablero { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); aspect-ratio: 1 / 1; transform-style: preserve-3d; }
 .casilla { position: relative; border: 0; padding: 0; transform-style: preserve-3d; cursor: default; }
