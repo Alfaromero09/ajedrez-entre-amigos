@@ -198,12 +198,6 @@ function hace(fecha) {
   return `Abrió hace ${h} ${h === 1 ? "hora" : "horas"}`;
 }
 
-function saludar() {
-  const h = new Date().getHours();
-  const parte = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
-  $("saludo").textContent = `${parte}, ${nombres[yo] || "jugador"}`;
-}
-
 function irAPartida(id) {
   history.pushState(null, "", `?p=${id}`);
   return abrirPartida(id);
@@ -211,12 +205,12 @@ function irAPartida(id) {
 
 async function cargarClub() {
   if (!yo) return;
-  saludar();
   const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const [salasR, vivoR, mesaR, mioR, recientesR] = await Promise.all([
+  const [salasR, vivoR, mesaR, claveR, mioR, recientesR] = await Promise.all([
     sb.from("partidas").select("id, blancas, minutos, creada").eq("estado", "esperando").gte("creada", desde).order("creada", { ascending: false }).limit(30),
     sb.from("partidas").select("id, blancas, negras, minutos, jugadas, actualizada, fen, reloj_blancas, reloj_negras, ultimo_tick").eq("estado", "jugando").order("actualizada", { ascending: false }).limit(20),
     sb.rpc("mesa_del_club"),
+    sb.rpc("clave_del_club"),
     sb.from("partidas").select("id, blancas, negras, resultado, motivo, minutos, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).or(`blancas.eq.${yo},negras.eq.${yo}`).order("actualizada", { ascending: false }).limit(50),
     sb.from("partidas").select("id, blancas, negras, resultado, motivo, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).order("actualizada", { ascending: false }).limit(6),
   ]);
@@ -242,7 +236,8 @@ async function cargarClub() {
   pintarNumeros(mesa.find((m) => m.id === yo), mioR.data || []);
   pintarResumen();
   pintarEnLinea();
-  pintarResultados(recientes);
+  pintarResultados(recientes.slice(0, 3));
+  pintarClave(claveR.data);
   pintarUltimo((mioR.data || [])[0]);
 }
 
@@ -286,65 +281,75 @@ function pintarUltimo(x) {
   const gane = (yoBlancas && x.resultado === "1-0") || (!yoBlancas && x.resultado === "0-1");
   const rival = esc(nombres[yoBlancas ? x.negras : x.blancas] || "tu rival");
   caja.classList.toggle("perdi", !gane);
-  caja.innerHTML = `<span class="sello-copa">${gane ? COPA : CORONA.replace("#2A1C0C", "#F3EADA")}</span>
-    <div class="ultimo-texto"><strong>${gane ? `¡Ganaste tu última partida contra ${rival}!` : `${rival} ganó la última, ${porQue(x.motivo)}.`}</strong>
-    <span>${gane ? `Fue ${porQue(x.motivo)}, ${hacePoco(x.actualizada)}. Sumas un punto en la mesa del club.` : "Pídele la revancha: crea una partida y mándale el link."}</span></div>
-    ${gane ? "" : `<button class="primario" data-revancha="${x.minutos || 10}">Revancha de ${textoTiempo(x.minutos || 10)}</button>`}`;
+  caja.innerHTML = gane
+    ? `<span class="sello-copa">${COPA}</span><span><strong>Ganaste a ${rival}</strong> <span class="gris">${porQue(x.motivo)}, ${hacePoco(x.actualizada)}</span></span>`
+    : `<span class="sello-copa">${CORONA.replace("#2A1C0C", "#F3EADA")}</span><span><strong>${rival} te ganó</strong> <span class="gris">${porQue(x.motivo)}</span></span>` +
+      `<button class="btn-fila dorado" data-revancha="${x.minutos || 10}">Revancha</button>`;
   caja.classList.remove("oculto");
 }
 
 function pintarSalas(salas) {
-  const ajenas = salas.filter((x) => x.blancas !== yo).length;
-  $("cuenta-salas").textContent = ajenas ? `${ajenas} ${ajenas === 1 ? "esperando rival" : "esperando rival"}` : "";
   if (!salas.length) {
-    $("salas").innerHTML = '<p class="vacio-club">No hay salas abiertas. Crea una partida y aparecerá aquí para que cualquiera del club se una.</p>';
+    $("salas").innerHTML = '<p class="vacio-club">Nadie espera rival. Crea una partida arriba.</p>';
     return;
   }
   $("salas").innerHTML = salas.map((x) => {
     const mia = x.blancas === yo;
     const botones = mia
-      ? `<button class="secundario" data-abrir="${x.id}">Abrir</button><button class="secundario" data-cancelar="${x.id}">Cerrar sala</button>`
-      : `<button class="primario" data-unirse="${x.id}">Unirse</button>`;
-    return `<div class="fila-sala">
-      <div class="quien">${ficha(x.blancas)}<div><strong>${esc(mia ? "Tu sala" : nombres[x.blancas] || "Jugador")}</strong><small>${hace(x.creada)}</small></div></div>
-      <span class="reloj-chip">${ICONO_RELOJ}${textoTiempo(x.minutos)}</span>
-      <div class="acciones">${botones}</div>
-    </div>`;
+      ? `<button class="btn-fila fantasma" data-abrir="${x.id}">Abrir</button><button class="btn-fila fantasma" data-cancelar="${x.id}" aria-label="Cerrar tu sala">Cerrar</button>`
+      : `<button class="btn-fila dorado" data-unirse="${x.id}">Unirse</button>`;
+    return `<div class="fila">${ficha(x.blancas)}<div><strong>${esc(mia ? "Tu sala" : nombres[x.blancas] || "Jugador")}</strong><small>${hace(x.creada)}</small></div>` +
+      `<span class="reloj-chip">${ICONO_RELOJ}${textoTiempo(x.minutos)}</span>${botones}</div>`;
   }).join("");
 }
 
 function pintarVivo(vivo) {
   if (!vivo.length) {
-    $("en-vivo").innerHTML = '<p class="vacio-club">Ahorita nadie está jugando. Cuando empiece una partida, aquí podrás mirarla.</p>';
+    $("en-vivo").innerHTML = '<p class="vacio-club">Nadie está jugando ahorita.</p>';
     return;
   }
   $("en-vivo").innerHTML = vivo.map((x) => {
     const mia = x.blancas === yo || x.negras === yo;
     const n = Math.ceil((x.jugadas?.length || 0) / 2);
-    const meta = `${textoTiempo(x.minutos)} · ${n ? `jugada ${n}` : "recién empieza"}`;
+    const meta = `${textoTiempo(x.minutos)}, ${n ? `jugada ${n}` : "recién empieza"}`;
     const nb = x.blancas === yo ? "Tú" : nombres[x.blancas] || "Jugador";
     const nn = x.negras === yo ? "Tú" : nombres[x.negras] || "Jugador";
-    return `<div class="carta-vivo${mia ? " mia" : ""}">
-      <div class="duelo"><span class="parejas">${ficha(x.blancas, "clara")}${ficha(x.negras, "oscura")}</span><strong>${esc(nb)} vs ${esc(nn)}</strong></div>
-      <div class="pie-vivo"><span>${meta}</span>${mia
-        ? `<button class="primario mirar" data-abrir="${x.id}">Volver a mi partida</button>`
-        : `<button class="secundario mirar" data-abrir="${x.id}">${ICONO_OJO}Mirar</button>`}</div>
-    </div>`;
+    return `<div class="fila"><span class="parejas">${ficha(x.blancas, "clara")}${ficha(x.negras, "oscura")}</span>` +
+      `<div><strong>${esc(nb)} vs ${esc(nn)}</strong><small>${meta}</small></div>` +
+      (mia ? `<button class="btn-fila dorado" data-abrir="${x.id}">Volver</button>`
+           : `<button class="btn-fila fantasma" data-abrir="${x.id}">${ICONO_OJO}Mirar</button>`) + `</div>`;
   }).join("");
 }
 
+function pintarCuentaMesas() {
+  const e = ultimasSalas.filter((x) => x.blancas !== yo).length;
+  const v = ultimasVivo.length;
+  $("cuenta-mesas").textContent = `${e} esperando rival, ${v} en vivo`;
+}
+
+let mesaCompleta = false;
+let ultimaMesa = [];
+$("ver-tabla").addEventListener("click", () => { mesaCompleta = !mesaCompleta; pintarMesa(ultimaMesa); });
 function pintarMesa(mesa) {
-  const filas = mesa.filter((m) => m.pj > 0 || m.id === yo);
+  ultimaMesa = mesa;
+  const todas = mesa.filter((m) => m.pj > 0 || m.id === yo);
+  $("ver-tabla").classList.toggle("oculto", todas.length <= 5);
+  $("ver-tabla").textContent = mesaCompleta ? "Ver solo el top 5" : "Ver tabla completa";
+  const filas = todas;
   if (!filas.length) {
     $("mesa").innerHTML = '<p class="vacio-club">Todavía no se termina ninguna partida. La primera victoria abre la tabla.</p>';
     return;
   }
   let pos = 0, previo = null;
-  $("mesa").innerHTML = filas.map((m, i) => {
+  const conPos = filas.map((m, i) => {
     if (m.pts !== previo) { pos = i + 1; previo = m.pts; }
+    return { ...m, pos };
+  });
+  const visibles = mesaCompleta ? conPos : conPos.filter((m, i) => i < 5 || m.id === yo);
+  $("mesa").innerHTML = visibles.map((m) => {
     const yoSoy = m.id === yo;
     return `<div class="mesa-fila${yoSoy ? " yo" : ""}">
-      <span class="pos">${pos}</span>
+      <span class="pos">${m.pos}</span>
       <span class="nom">${ficha(m.id, "chica")}<b>${esc(m.nombre)}</b>${yoSoy ? '<span class="etiqueta-tu">Tú</span>' : ""}</span>
       <span>${m.pj}</span><span>${m.g}</span><span>${m.p}</span><span>${m.t}</span><span class="pts">${m.pts}</span>
     </div>`;
@@ -381,16 +386,18 @@ function estadoDe(id) {
 
 function pintarEnLinea() {
   const ids = Object.keys(enLinea);
+  $("cuenta-linea").textContent = ids.length ? `${ids.length} ${ids.length === 1 ? "conectado" : "conectados"}` : "";
   if (!ids.length) {
     $("en-linea").innerHTML = '<p class="vacio-club">Solo estás tú por ahora.</p>';
     return;
   }
-  ids.sort((a, b) => (a === yo ? -1 : b === yo ? 1 : (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || "")));
+  ids.sort((a, b) => (a === yo ? -1 : b === yo ? 1 : (enLinea[a].jugando - enLinea[b].jugando) || (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || "")));
   $("en-linea").innerHTML = ids.map((id) => {
     const u = enLinea[id];
-    const boton = id !== yo && !u.jugando
-      ? `<button class="llamar-btn" data-retar="${id}" aria-label="Invitar a ${esc(u.nombre)} a jugar">${ICONO_TEL}Jugar</button>` : "";
-    return `<div class="persona">${ficha(id, "chica punto")}<div><strong>${esc(id === yo ? `${u.nombre} (tú)` : u.nombre)}</strong><small>${u.jugando ? "Jugando" : estadoDe(id)}</small></div>${boton}</div>`;
+    const lado = id === yo ? "" : u.jugando
+      ? '<span class="ocupado">Ocupado</span>'
+      : `<button class="btn-fila verde" data-retar="${id}" aria-label="Invitar a ${esc(u.nombre)} a jugar">${ICONO_TEL}Jugar</button>`;
+    return `<div class="fila">${ficha(id, "punto-verde")}<div><strong>${esc(id === yo ? `${u.nombre} (tú)` : u.nombre)}</strong><small>${u.jugando ? "Jugando" : estadoDe(id)}</small></div>${lado}</div>`;
   }).join("");
 }
 
@@ -402,8 +409,9 @@ function pintarResumen() {
   else if (esperando.length === 1) a = `${esperando[0]} está esperando rival.`;
   else if (esperando.length === 2) a = `${esperando[0]} y ${esperando[1]} están esperando rival.`;
   else a = `${esperando.length} jugadores están esperando rival.`;
-  const b = vivos === 0 ? " Crea una partida y comparte el link." : vivos === 1 ? " Hay una partida en vivo por si quieres mirar." : ` Hay ${vivos} partidas en vivo por si quieres mirar.`;
+  const b = vivos === 0 ? " Crea una partida o llama a alguien conectado." : vivos === 1 ? " Hay una partida en vivo por si quieres mirar." : ` Hay ${vivos} partidas en vivo por si quieres mirar.`;
   $("resumen").textContent = a + b;
+  pintarCuentaMesas();
 }
 
 $("inicio").addEventListener("click", async (e) => {
@@ -479,6 +487,34 @@ function actualizarPresencia() {
 }
 setInterval(() => { if (yo && !$("inicio").classList.contains("oculto")) { pintarSalas(ultimasSalas); } }, 60000);
 
+// ---------- Invitar al club ----------
+let claveClub = null;
+function pintarClave(clave) {
+  claveClub = clave || null;
+  $("invita-clave").classList.toggle("oculto", !claveClub);
+  $("clave-club").textContent = claveClub || "";
+}
+function textoInvitacion() {
+  return `¡Te invito a jugar ajedrez conmigo en línea! Entra a https://ajedrezentreamigos.mx` +
+    (claveClub ? ` y regístrate con la clave del club: ${claveClub}` : " y pídeme la clave del club para registrarte.");
+}
+async function copiarInvitacion() {
+  try {
+    await navigator.clipboard.writeText(textoInvitacion());
+    avisar("Invitación copiada. Pégala en WhatsApp o donde quieras.");
+  } catch {
+    avisar(textoInvitacion());
+  }
+}
+$("copiar-invitacion").addEventListener("click", copiarInvitacion);
+$("compartir").addEventListener("click", async () => {
+  if (navigator.share) {
+    try { return await navigator.share({ title: "Ajedrez entre Amigos", text: textoInvitacion() }); }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  copiarInvitacion();
+});
+
 // ---------- Llamar a jugar (sin copiar links) ----------
 const ICONO_TEL = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M6.6 10.8a15.2 15.2 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>';
 const ESPERA_LLAMADA = 30000;
@@ -503,11 +539,11 @@ function pintarLlamables() {
     const u = enLinea[id];
     const sonando = !!llamando[id];
     const boton = u.jugando
-      ? `<button class="llamar-btn" disabled>Ocupado</button>`
+      ? `<span class="ocupado">Ocupado</span>`
       : sonando
         ? `<button class="llamar-btn sonando" data-colgar="${id}" aria-label="Cancelar llamada">${ICONO_TEL}Llamando…</button>`
         : `<button class="llamar-btn" data-llamar="${id}">${ICONO_TEL}Llamar</button>`;
-    return `<div class="llamable">${ficha(id, "chica punto")}<div><strong>${esc(u.nombre)}</strong><small>${u.jugando ? "En otra partida" : sonando ? "Sonando…" : "Conectado"}</small></div>${boton}</div>`;
+    return `<div class="llamable">${ficha(id, "punto-verde")}<div><strong>${esc(u.nombre)}</strong><small>${u.jugando ? "En otra partida" : sonando ? "Sonando…" : "Conectado"}</small></div>${boton}</div>`;
   }).join("");
 }
 
