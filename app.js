@@ -222,18 +222,20 @@ async function cargarClub() {
   const salas = salasR.data || [];
   // Fuera las que ya se quedaron sin tiempo aunque nadie lo haya reclamado
   const vivo = (vivoR.data || []).filter((x) => {
-    if (!x.ultimo_tick) return true;
+    if (!x.ultimo_tick) return false;
     const resta = (x.fen.split(" ")[1] === "w" ? x.reloj_blancas : x.reloj_negras) - (ahoraServidor() - new Date(x.ultimo_tick).getTime());
     return resta > 0;
   });
   const mesa = mesaR.data || [];
   mesa.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; });
-  await cargarNombres([...salas.map((x) => x.blancas), ...vivo.flatMap((x) => [x.blancas, x.negras])]);
-  ultimasSalas = salas;
-  ultimasVivo = vivo;
+  await cargarNombres([...salasR.data || [], ...vivo].flatMap((x) => [x.blancas, x.negras]));
+  // Solo partidas de jugadores con cuenta del club (las pruebas anónimas de la fase 1 no tienen nombre)
+  const conCuenta = (id) => !!nombres[id];
+  ultimasSalas = salas.filter((x) => conCuenta(x.blancas));
+  ultimasVivo = vivo.filter((x) => conCuenta(x.blancas) && conCuenta(x.negras));
   if ($("inicio").classList.contains("oculto")) return;
-  pintarSalas(salas);
-  pintarVivo(vivo);
+  pintarSalas(ultimasSalas);
+  pintarVivo(ultimasVivo);
   pintarMesa(mesa);
   pintarNumeros(mesa.find((m) => m.id === yo), mioR.data || []);
   pintarResumen();
