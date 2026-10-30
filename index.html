@@ -169,6 +169,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 #jugadas li { display: grid; grid-template-columns: 36px repeat(2, minmax(0, 1fr)); gap: 8px; padding: 3px 0; }
 #jugadas li span:first-child { color: #8F7C63; }
 .vacio { color: var(--suave); margin: 0; }
+#jugadas li.vacio { display: block; }
 
 .cabecera-derecha { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .cabecera-derecha span { font-family: inherit; font-size: 15px; color: var(--suave); letter-spacing: 0; }
@@ -324,6 +325,49 @@ form { display: flex; flex-direction: column; gap: 16px; }
   .ultimo { padding-left: 96px; }
 }
 @media (prefers-reduced-motion: reduce) { .final, .final-tarjeta, .medalla, .sticker, .reloj.poco.activo { animation: none !important; } }
+
+/* ---------- Llamar a jugar ---------- */
+.invitar { display: flex; flex-direction: column; gap: 12px; }
+.invitar h2 { font-size: 22px; }
+.invitar-ayuda { margin: 0; font-size: 14px; line-height: 1.6; color: var(--suave); }
+.llamables { display: flex; flex-direction: column; gap: 4px; }
+.llamable { display: flex; align-items: center; gap: 12px; padding: 8px; margin: 0 -8px; border-radius: 12px; transition: background-color 160ms ease; }
+.llamable:hover { background-color: #31221A; }
+.llamable > div { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.llamable strong { font-size: 16px; font-weight: 500; }
+.llamable small { font-size: 13px; color: var(--suave); }
+.llamar-btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--laton); color: var(--tinta); font-size: 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(10,6,3,0.4), 0 6px 16px rgba(205,165,78,0.22); }
+.llamar-btn svg { width: 16px; height: 16px; }
+.llamar-btn:hover { filter: brightness(1.08); }
+.llamar-btn:disabled { cursor: default; opacity: 0.55; transform: none; }
+.llamar-btn.sonando { background: #3A281C; color: var(--laton-claro); box-shadow: 0 0 0 0 rgba(205,165,78,0.5); animation: timbre 1.4s ease-out infinite; }
+.llamar-btn.sonando svg { animation: vibra 0.5s ease-in-out infinite; }
+@keyframes timbre { 0% { box-shadow: 0 0 0 0 rgba(227,199,126,0.55); } 100% { box-shadow: 0 0 0 14px rgba(227,199,126,0); } }
+@keyframes vibra { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
+.invitar-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding-top: 12px; border-top: 1px solid var(--linea); font-size: 14px; color: var(--suave); }
+.enlace-boton { padding: 2px 0; border: 0; background: none; color: var(--laton-claro); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.enlace-boton:hover { color: var(--texto); transform: none; }
+.llamada { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px; background: rgba(15,9,5,0.66); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); animation: aparecer 220ms ease-out both; }
+.llamada-tarjeta { width: 100%; max-width: 400px; padding: 36px 28px 24px; border-radius: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: radial-gradient(120% 70% at 50% 0%, rgba(227,199,126,0.18), transparent 60%), linear-gradient(180deg, #3A281C, #2A1C13);
+  border: 1px solid rgba(227,199,126,0.32); box-shadow: 0 2px 4px rgba(10,6,3,0.45), 0 30px 70px rgba(10,6,3,0.55); animation: subir 520ms var(--resorte) both; }
+.llamada-foto { position: relative; width: 112px; height: 112px; display: grid; place-items: center; margin-bottom: 12px; }
+.llamada-foto .ficha.grande { position: relative; width: 88px; height: 88px; background: #4A3221; box-shadow: 0 0 0 3px var(--laton); }
+.onda { position: absolute; inset: 12px; border-radius: 50%; border: 2px solid var(--laton-claro); opacity: 0; animation: onda 2.1s ease-out infinite; }
+.onda.dos { animation-delay: 0.7s; } .onda.tres { animation-delay: 1.4s; }
+@keyframes onda { 0% { opacity: 0.7; transform: scale(0.9); } 100% { opacity: 0; transform: scale(1.7); } }
+.llamada h2 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.15; }
+.llamada p { margin: 0; color: var(--suave); font-size: 16px; line-height: 1.6; }
+.llamada-botones { display: flex; gap: 12px; width: 100%; margin-top: 16px; }
+.llamada-botones button { flex: 1; height: 52px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; font-weight: 600; }
+.llamada-botones svg { width: 18px; height: 18px; }
+.contestar-btn { border: 0; background: #7FA86E; color: #13200E; box-shadow: 0 8px 20px rgba(127,168,110,0.3); }
+.contestar-btn:hover { filter: brightness(1.08); }
+.colgar-btn { border: 1px solid rgba(233,220,195,0.18); background: transparent; color: var(--texto); }
+.colgar-btn:hover { background-color: #3A281C; }
+.llamada-cuenta { font-size: 13px; color: #8F7C63; font-variant-numeric: tabular-nums; }
+.persona .llamar-btn { margin-left: auto; height: 34px; padding: 0 12px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .onda, .llamar-btn.sonando, .llamar-btn.sonando svg { animation: none !important; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -469,7 +513,15 @@ form { display: flex; flex-direction: column; gap: 16px; }
       <aside class="lateral">
         <div class="panel">
           <p id="estado">Cargando partida…</p>
-          <button id="copiar" class="secundario oculto">Copiar link de invitación</button>
+          <div id="invitar" class="invitar oculto">
+            <h2>Llama a un amigo</h2>
+            <p class="invitar-ayuda">Si está conectado, le suena la invitación y entra directo a esta mesa.</p>
+            <div id="llamables" class="llamables"></div>
+            <div class="invitar-link">
+              <span>¿No está conectado?</span>
+              <button id="copiar" class="enlace-boton">Copiar link para mandárselo</button>
+            </div>
+          </div>
           <button id="unirse" class="primario oculto">Unirme con las negras</button>
           <button id="rendirse" class="secundario peligro oculto">Rendirme</button>
           <a id="nueva" class="secundario oculto" href="./" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Volver al inicio</a>
@@ -504,6 +556,18 @@ form { display: flex; flex-direction: column; gap: 16px; }
       <button class="secundario" id="final-tablero">Ver el tablero</button>
       <a class="secundario final-club" href="./">Volver al club</a>
     </div>
+  </div>
+</div>
+<div id="llamada" class="llamada oculto" role="alertdialog" aria-modal="true" aria-labelledby="llamada-titulo" aria-describedby="llamada-texto">
+  <div class="llamada-tarjeta">
+    <div class="llamada-foto"><span class="onda"></span><span class="onda dos"></span><span class="onda tres"></span><span class="ficha grande" id="llamada-ficha"></span></div>
+    <h2 id="llamada-titulo">Rocío te invita a jugar</h2>
+    <p id="llamada-texto">Partida de 10 min. Tú llevas las negras.</p>
+    <div class="llamada-botones">
+      <button class="colgar-btn" id="llamada-no"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>Ahora no</button>
+      <button class="contestar-btn" id="llamada-si"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M6.6 10.8a15.2 15.2 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>Jugar</button>
+    </div>
+    <span class="llamada-cuenta" id="llamada-cuenta"></span>
   </div>
 </div>
 <div id="aviso" role="status" class="oculto"></div>

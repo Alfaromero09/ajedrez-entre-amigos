@@ -206,7 +206,7 @@ function saludar() {
 
 function irAPartida(id) {
   history.pushState(null, "", `?p=${id}`);
-  abrirPartida(id);
+  return abrirPartida(id);
 }
 
 async function cargarClub() {
@@ -388,7 +388,9 @@ function pintarEnLinea() {
   ids.sort((a, b) => (a === yo ? -1 : b === yo ? 1 : (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || "")));
   $("en-linea").innerHTML = ids.map((id) => {
     const u = enLinea[id];
-    return `<div class="persona">${ficha(id, "chica punto")}<div><strong>${esc(id === yo ? `${u.nombre} (tú)` : u.nombre)}</strong><small>${estadoDe(id)}</small></div></div>`;
+    const boton = id !== yo && !u.jugando
+      ? `<button class="llamar-btn" data-retar="${id}" aria-label="Invitar a ${esc(u.nombre)} a jugar">${ICONO_TEL}Jugar</button>` : "";
+    return `<div class="persona">${ficha(id, "chica punto")}<div><strong>${esc(id === yo ? `${u.nombre} (tú)` : u.nombre)}</strong><small>${u.jugando ? "Jugando" : estadoDe(id)}</small></div>${boton}</div>`;
   }).join("");
 }
 
@@ -408,6 +410,14 @@ $("inicio").addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.dataset.abrir) return irAPartida(b.dataset.abrir);
+  if (b.dataset.retar) {
+    b.disabled = true;
+    const { data, error } = await sb.rpc("crear_partida", { p_minutos: minutosElegidos });
+    if (error) { b.disabled = false; return avisar("No se pudo crear la partida. Intenta de nuevo."); }
+    const para = b.dataset.retar;
+    await irAPartida(data);
+    return llamar(para);
+  }
   if (b.dataset.revancha) {
     const { data, error } = await sb.rpc("crear_partida", { p_minutos: Number(b.dataset.revancha) });
     if (error) return avisar("No se pudo crear la partida. Intenta de nuevo.");
@@ -436,26 +446,196 @@ function escucharClub() {
   if (canalClub) return;
   canalClub = sb.channel("club", { config: { presence: { key: yo } } })
     .on("postgres_changes", { event: "*", schema: "public", table: "partidas" }, refrescarClub)
+    .on("broadcast", { event: "llamada" }, ({ payload }) => recibirLlamada(payload))
+    .on("broadcast", { event: "respuesta" }, ({ payload }) => recibirRespuesta(payload))
+    .on("broadcast", { event: "colgar" }, ({ payload }) => { if (llamadaEntrante && llamadaEntrante.id === payload.id) cerrarLlamada(); })
     .on("presence", { event: "sync" }, () => {
       const estado = canalClub.presenceState();
       enLinea = {};
       for (const [id, metas] of Object.entries(estado)) {
         const m = metas[0] || {};
-        enLinea[id] = { nombre: m.nombre || nombres[id] || "Jugador" };
+        enLinea[id] = { nombre: m.nombre || nombres[id] || "Jugador", jugando: metas.some((x) => x.jugando) };
         if (m.avatar) avatares[id] = m.avatar;
       }
       if (!$("inicio").classList.contains("oculto")) pintarEnLinea();
+      if (partida && partida.estado === "esperando" && miColor() === "w") pintarLlamables();
     })
     .subscribe((estado) => {
       if (estado === "SUBSCRIBED") presenciaEstado("club");
     });
 }
 
+let presenciaDonde = "club";
+let presenciaJugando = null;
 function presenciaEstado(donde) {
+  presenciaDonde = donde;
   if (!canalClub || !yo) return;
-  canalClub.track({ nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", donde }).catch(() => {});
+  presenciaJugando = estoyJugando();
+  canalClub.track({ nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", donde, jugando: presenciaJugando }).catch(() => {});
+}
+const estoyJugando = () => !!(partida && partida.estado === "jugando" && miColor());
+function actualizarPresencia() {
+  if (estoyJugando() !== presenciaJugando) presenciaEstado(presenciaDonde);
 }
 setInterval(() => { if (yo && !$("inicio").classList.contains("oculto")) { pintarSalas(ultimasSalas); } }, 60000);
+
+// ---------- Llamar a jugar (sin copiar links) ----------
+const ICONO_TEL = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M6.6 10.8a15.2 15.2 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>';
+const ESPERA_LLAMADA = 30000;
+const llamando = {};          // para -> { id, partida, timer }
+let llamadaEntrante = null;   // { id, de, nombre, partida, minutos }
+let cuentaLlamada = null;
+let timbre = null;
+
+function enviar(evento, payload) {
+  if (!canalClub) return;
+  canalClub.send({ type: "broadcast", event: evento, payload }).catch?.(() => {});
+}
+
+function pintarLlamables() {
+  const otros = Object.keys(enLinea).filter((id) => id !== yo);
+  if (!otros.length) {
+    $("llamables").innerHTML = '<p class="vacio">No hay nadie más conectado ahorita. Usa el link de abajo.</p>';
+    return;
+  }
+  otros.sort((a, b) => (enLinea[a].jugando - enLinea[b].jugando) || enLinea[a].nombre.localeCompare(enLinea[b].nombre));
+  $("llamables").innerHTML = otros.map((id) => {
+    const u = enLinea[id];
+    const sonando = !!llamando[id];
+    const boton = u.jugando
+      ? `<button class="llamar-btn" disabled>Ocupado</button>`
+      : sonando
+        ? `<button class="llamar-btn sonando" data-colgar="${id}" aria-label="Cancelar llamada">${ICONO_TEL}Llamando…</button>`
+        : `<button class="llamar-btn" data-llamar="${id}">${ICONO_TEL}Llamar</button>`;
+    return `<div class="llamable">${ficha(id, "chica punto")}<div><strong>${esc(u.nombre)}</strong><small>${u.jugando ? "En otra partida" : sonando ? "Sonando…" : "Conectado"}</small></div>${boton}</div>`;
+  }).join("");
+}
+
+$("llamables").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.llamar) llamar(b.dataset.llamar);
+  if (b.dataset.colgar) colgar(b.dataset.colgar, true);
+});
+
+function llamar(para) {
+  if (!partida || partida.estado !== "esperando" || miColor() !== "w" || llamando[para]) return;
+  const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  enviar("llamada", { id, de: yo, para, nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", partida: partida.id, minutos: partida.minutos || 10 });
+  llamando[para] = {
+    id,
+    timer: setTimeout(() => {
+      colgar(para, false);
+      avisar(`${enLinea[para]?.nombre || "Tu amigo"} no contestó. Prueba de nuevo o mándale el link.`);
+    }, ESPERA_LLAMADA),
+  };
+  pintarLlamables();
+}
+
+function colgar(para) {
+  const l = llamando[para];
+  if (!l) return;
+  clearTimeout(l.timer);
+  delete llamando[para];
+  enviar("colgar", { id: l.id });
+  if (partida && partida.estado === "esperando") pintarLlamables();
+}
+function colgarTodas() { Object.keys(llamando).forEach((p) => colgar(p, true)); }
+
+function recibirRespuesta(r) {
+  if (r.para !== yo) return;
+  const l = llamando[r.de];
+  if (!l || l.id !== r.id) return;
+  clearTimeout(l.timer);
+  delete llamando[r.de];
+  const n = enLinea[r.de]?.nombre || nombres[r.de] || "Tu amigo";
+  if (r.respuesta === "si") avisar(`¡${n} aceptó! Ya viene a la mesa.`);
+  else if (r.respuesta === "ocupado") avisar(`${n} está en otra partida. Inténtalo al rato.`);
+  else avisar(`${n} no puede ahora.`);
+  if (partida && partida.estado === "esperando") pintarLlamables();
+}
+
+function responder(respuesta) {
+  if (!llamadaEntrante) return;
+  enviar("respuesta", { id: llamadaEntrante.id, de: yo, para: llamadaEntrante.de, respuesta });
+}
+
+function recibirLlamada(l) {
+  if (l.para !== yo) return;
+  if (estoyJugando() || llamadaEntrante) {
+    return enviar("respuesta", { id: l.id, de: yo, para: l.de, respuesta: "ocupado" });
+  }
+  llamadaEntrante = l;
+  if (l.avatar) avatares[l.de] = l.avatar;
+  nombres[l.de] = nombres[l.de] || l.nombre;
+  $("llamada-ficha").innerHTML = iconoSVG(l.avatar || "rey");
+  $("llamada-titulo").textContent = `${l.nombre} te invita a jugar`;
+  $("llamada-texto").textContent = `Partida de ${textoTiempo(l.minutos)}. Tú llevas las negras.`;
+  $("llamada").classList.remove("oculto");
+  $("llamada-si").focus({ preventScroll: true });
+  let quedan = ESPERA_LLAMADA / 1000;
+  $("llamada-cuenta").textContent = `Se cuelga sola en ${quedan} s`;
+  clearInterval(cuentaLlamada);
+  cuentaLlamada = setInterval(() => {
+    quedan--;
+    $("llamada-cuenta").textContent = `Se cuelga sola en ${quedan} s`;
+    if (quedan <= 0) { responder("no"); cerrarLlamada(); }
+  }, 1000);
+  sonar();
+  if (document.hidden) document.title = `📞 ${l.nombre} te invita a jugar`;
+}
+
+function cerrarLlamada() {
+  llamadaEntrante = null;
+  clearInterval(cuentaLlamada);
+  callar();
+  $("llamada").classList.add("oculto");
+  document.title = "Ajedrez entre Amigos";
+}
+
+$("llamada-no").addEventListener("click", () => { responder("no"); cerrarLlamada(); });
+$("llamada-si").addEventListener("click", async () => {
+  const l = llamadaEntrante;
+  if (!l) return;
+  $("llamada-si").disabled = true;
+  const { error } = await sb.rpc("unirse_partida", { p: l.partida });
+  $("llamada-si").disabled = false;
+  if (error) {
+    cerrarLlamada();
+    return avisar("Esa mesa ya no está disponible.");
+  }
+  responder("si");
+  cerrarLlamada();
+  irAPartida(l.partida);
+});
+
+// Timbre suave hecho con el navegador (sin archivos de audio)
+function sonar() {
+  callar();
+  let ctx;
+  try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
+  const tono = () => {
+    const t = ctx.currentTime;
+    [[659, 0], [880, 0.18], [659, 0.6], [880, 0.78]].forEach(([f, d]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t + d);
+      g.gain.linearRampToValueAtTime(0.12, t + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + d + 0.16);
+      o.connect(g).connect(ctx.destination);
+      o.start(t + d); o.stop(t + d + 0.18);
+    });
+  };
+  tono();
+  timbre = { ctx, intervalo: setInterval(tono, 2600) };
+}
+function callar() {
+  if (!timbre) return;
+  clearInterval(timbre.intervalo);
+  timbre.ctx.close().catch(() => {});
+  timbre = null;
+}
+window.addEventListener("beforeunload", colgarTodas);
 
 // ---------- Partida ----------
 async function recargar(id) {
@@ -512,7 +692,7 @@ $("unirse").addEventListener("click", async () => {
 $("copiar").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(location.href);
-    avisar("Link copiado. Mándaselo a tu amigo.");
+    avisar("Link copiado. Mándaselo por WhatsApp o por donde quieras.");
   } catch {
     avisar(location.href);
   }
@@ -758,13 +938,16 @@ function dibujar() {
 
   const estado = $("estado");
   const jugando = partida.estado === "jugando";
-  $("copiar").classList.toggle("oculto", !(partida.estado === "esperando" && color === "w"));
+  $("invitar").classList.toggle("oculto", !(partida.estado === "esperando" && color === "w"));
+  if (partida.estado === "esperando" && color === "w") pintarLlamables();
+  else colgarTodas();
+  actualizarPresencia();
   $("unirse").classList.toggle("oculto", !(partida.estado === "esperando" && color !== "w"));
   $("rendirse").classList.toggle("oculto", !(jugando && color));
   $("nueva").classList.toggle("oculto", partida.estado !== "terminada" && !!color);
   if (partida.estado === "esperando") {
     estado.textContent = color === "w"
-      ? "Esperando rival. Copia el link y compártelo."
+      ? "Esperando rival. Llama a alguien que esté conectado o mándale el link."
       : `${nombres[partida.blancas] || "Alguien"} te espera en esta mesa.`;
   } else if (partida.estado === "terminada") {
     estado.textContent = textoFinal();
