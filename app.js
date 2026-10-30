@@ -268,8 +268,8 @@ function pintarResultados(lista) {
     }
     const g = x.resultado === "1-0" ? x.blancas : x.negras;
     const p = x.resultado === "1-0" ? x.negras : x.blancas;
-    const verbo = g === yo ? "ganaste a" : "le ganó a";
-    return `<div class="resultado"><span class="corona">${CORONA}</span><div><strong><b>${n(g)}</b> ${verbo} ${n(p)}</strong><small>${porQue(x.motivo)} · ${hacePoco(x.actualizada)}</small></div></div>`;
+    const frase = g === yo ? `<b>Tú</b> le ganaste a ${n(p)}` : p === yo ? `<b>${n(g)}</b> te ganó` : `<b>${n(g)}</b> le ganó a ${n(p)}`;
+    return `<div class="resultado"><span class="corona">${CORONA}</span><div><strong>${frase}</strong><small>${porQue(x.motivo)} · ${hacePoco(x.actualizada)}</small></div></div>`;
   }).join("");
 }
 
