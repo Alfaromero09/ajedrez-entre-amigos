@@ -28,6 +28,11 @@ function avisar(texto) {
   avisar.t = setTimeout(() => el.classList.add("oculto"), 4500);
 }
 
+// Llegó desde el enlace del correo de confirmación (se lee antes de que Supabase limpie la URL)
+const vieneDeConfirmar = /type=(signup|email|invite)/.test(location.hash) || new URLSearchParams(location.search).has("code");
+// Teléfonos y tabletas: pantalla táctil sin mouse
+const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
+
 function mostrar(vista) {
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
 }
@@ -147,6 +152,9 @@ async function entrar(usuario) {
   const id = idDeLaUrl();
   if (id) abrirPartida(id);
   else mostrar("inicio");
+  $("bienvenida").classList.toggle("oculto", !vieneDeConfirmar);
+  if ((avatares[yo] || usuario.user_metadata?.avatar) === "dama") $("bienvenida-titulo").textContent = "¡Bienvenida al club!";
+  $("sugerencia-escritorio").classList.toggle("oculto", !esMovil);
 }
 
 // ---------- Inicio ----------

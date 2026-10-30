@@ -116,6 +116,18 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .campo { display: flex; flex-direction: column; gap: 6px; }
 .campo label { font-size: 14px; color: var(--suave); }
 .campo input { height: 46px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); font: inherit; font-size: 16px; }
+.armar { display: flex; flex-direction: column; gap: 24px; }
+.bienvenida { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; background: linear-gradient(135deg, rgba(205,165,78,0.16), rgba(205,165,78,0.05)); border: 1px solid rgba(227,199,126,0.32); box-shadow: var(--sombra-1); }
+.bienvenida div { display: flex; flex-direction: column; gap: 2px; }
+.bienvenida strong { font-family: "Fraunces", Georgia, serif; font-weight: 500; font-size: 20px; color: var(--texto); letter-spacing: -0.01em; }
+.bienvenida span:not(.sello) { color: var(--suave); font-size: 15px; }
+.sello { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--laton); color: var(--tinta); box-shadow: 0 0 0 4px rgba(205,165,78,0.18); }
+.sello svg { width: 20px; height: 20px; }
+.sugerencia { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; background: var(--panel); border: 1px solid var(--linea); box-shadow: var(--sombra-1); }
+.sugerencia .monitor { flex: none; width: 34px; color: var(--laton-claro); }
+.sugerencia .monitor svg { width: 100%; height: auto; display: block; }
+#inicio .sugerencia p { font-size: 15px; line-height: 1.6; }
+.sugerencia strong { color: var(--laton-claro); font-weight: 600; }
 .clave { position: relative; }
 .clave input { width: 100%; padding-right: 52px; }
 .ojo { position: absolute; right: 4px; top: 4px; width: 38px; height: 38px; border: 0; border-radius: 8px; background: transparent; color: var(--suave); display: grid; place-items: center; transition: color 160ms ease, background-color 160ms ease, transform 180ms var(--resorte); }
@@ -190,6 +202,15 @@ form { display: flex; flex-direction: column; gap: 16px; }
     </section>
 
     <section id="inicio" class="oculto">
+      <div id="bienvenida" class="bienvenida oculto" role="status">
+        <span class="sello" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+        <div><strong id="bienvenida-titulo">¡Bienvenido al club!</strong><span>Tu correo quedó confirmado y tu cuenta está lista.</span></div>
+      </div>
+      <div id="sugerencia-escritorio" class="sugerencia oculto">
+        <span class="monitor" aria-hidden="true"><svg viewBox="0 0 64 52" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="56" height="34" rx="4"/><path d="M24 48h16M32 38v10"/></svg></span>
+        <p><strong>Tip:</strong> el tablero luce mejor en computadora. Si puedes, regresa a tu escritorio y entra en <strong>ajedrezentreamigos.mx</strong>; si no, aquí también puedes jugar.</p>
+      </div>
+      <div id="armar" class="armar">
       <h1>Arma una partida y manda el link</h1>
       <p>Elige el tiempo de cada jugador. Quien abra el link se sienta con las negras.</p>
       <div class="tiempos" role="group" aria-label="Tiempo por jugador" id="tiempos">
@@ -202,6 +223,7 @@ form { display: flex; flex-direction: column; gap: 16px; }
         <button type="button" data-min="120" aria-pressed="false">2 horas</button>
       </div>
       <div><button id="crear" class="primario">Crear partida</button></div>
+      </div>
     </section>
 
     <section id="partida" class="oculto">
