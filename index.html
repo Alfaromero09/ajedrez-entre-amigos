@@ -66,7 +66,11 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .barra-nueva h2 { font-size: 18px; }
 .barra-nueva h2 { margin-right: 4px; }
 .barra-nueva .tiempos { flex: 0 1 auto; gap: 6px; }
-.barra-nueva .primario { margin-left: auto; }
+.barra-nueva .primario { margin-left: 0; }
+.rival-elegir { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; font-size: 13px; color: var(--suave); }
+.rival-elegir select { height: 36px; max-width: 190px; padding: 0 30px 0 12px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.18); background: #1F150E url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23BFAB8F' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 16px; color: var(--texto); font: inherit; font-size: 13px; appearance: none; cursor: pointer; }
+.rival-elegir select:focus-visible { outline: 2px solid var(--laton-claro); outline-offset: 2px; }
+.etiqueta-apartada { padding: 1px 7px; border-radius: 6px; background: rgba(127,168,110,0.18); color: #A9CB9A; font-size: 11px; font-weight: 600; flex: none; }
 .barra-nueva .tiempos button { height: 34px; min-width: 0; padding: 0 9px; font-size: 13px; }
 .primario.chico { height: 40px; padding: 0 18px; border-radius: 10px; font-size: 14px; }
 .primario:hover { filter: brightness(1.08); }
@@ -489,6 +493,9 @@ form { display: flex; flex-direction: column; gap: 16px; }
               <button type="button" data-min="60" aria-pressed="false">1 hora</button>
               <button type="button" data-min="120" aria-pressed="false">2 horas</button>
             </div>
+            <label class="rival-elegir"><span>Contra</span>
+              <select id="rival"><option value="">Cualquiera del club</option></select>
+            </label>
             <button id="crear" class="primario chico">Crear partida</button>
           </section>
 

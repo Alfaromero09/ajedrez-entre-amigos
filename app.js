@@ -173,11 +173,15 @@ $("tiempos").addEventListener("click", (e) => {
   $("tiempos").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
 });
 
-$("crear").addEventListener("click", async () => {
-  const { data, error } = await sb.rpc("crear_partida", { p_minutos: minutosElegidos });
-  if (error) return avisar("No se pudo crear la partida. Intenta de nuevo.");
-  irAPartida(data);
-});
+// Crea una mesa (opcionalmente apartada para un rival) y, si ese rival está conectado, le llama
+async function crearMesa(minutos, rival) {
+  const { data, error } = await sb.rpc("crear_partida", rival ? { p_minutos: minutos, p_rival: rival } : { p_minutos: minutos });
+  if (error) { avisar("No se pudo crear la partida. Intenta de nuevo."); return null; }
+  await irAPartida(data);
+  if (rival && enLinea[rival] && !enLinea[rival].jugando) llamar(rival);
+  return data;
+}
+$("crear").addEventListener("click", () => crearMesa(minutosElegidos, $("rival").value || null));
 
 // ---------- Dashboard del club ----------
 const ICONO_RELOJ = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
@@ -208,14 +212,15 @@ async function cargarClub() {
   if (!yo) return;
   const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const [salasR, vivoR, mesaR, claveR, mioR, recientesR] = await Promise.all([
-    sb.from("partidas").select("id, blancas, minutos, creada").eq("estado", "esperando").gte("creada", desde).order("creada", { ascending: false }).limit(30),
+    sb.from("partidas").select("id, blancas, minutos, creada, reservada_para").eq("estado", "esperando").gte("creada", desde).order("creada", { ascending: false }).limit(30),
     sb.from("partidas").select("id, blancas, negras, minutos, jugadas, actualizada, fen, reloj_blancas, reloj_negras, ultimo_tick").eq("estado", "jugando").order("actualizada", { ascending: false }).limit(20),
     sb.rpc("mesa_del_club"),
     sb.rpc("clave_del_club"),
     sb.from("partidas").select("id, blancas, negras, resultado, motivo, minutos, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).or(`blancas.eq.${yo},negras.eq.${yo}`).order("actualizada", { ascending: false }).limit(50),
     sb.from("partidas").select("id, blancas, negras, resultado, motivo, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).order("actualizada", { ascending: false }).limit(6),
   ]);
-  const salas = salasR.data || [];
+  // Las mesas apartadas solo las ven quien la creó y para quien se apartó
+  const salas = (salasR.data || []).filter((x) => !x.reservada_para || x.reservada_para === yo || x.blancas === yo);
   // Fuera las que ya se quedaron sin tiempo aunque nadie lo haya reclamado
   const vivo = (vivoR.data || []).filter((x) => {
     if (!x.ultimo_tick) return false;
@@ -224,6 +229,7 @@ async function cargarClub() {
   });
   const mesa = mesaR.data || [];
   mesa.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; });
+  pintarRivales(mesa);
   const recientes = recientesR.data || [];
   await cargarNombres([...salasR.data || [], ...vivo, ...recientes].flatMap((x) => [x.blancas, x.negras]));
   // Solo partidas de jugadores con cuenta del club (las pruebas anónimas de la fase 1 no tienen nombre)
@@ -285,7 +291,7 @@ function pintarUltimo(x) {
   caja.innerHTML = gane
     ? `<span class="sello-copa">${COPA}</span><span><strong>Ganaste a ${rival}</strong> <span class="gris">${porQue(x.motivo)}, ${hacePoco(x.actualizada)}</span></span>`
     : `<span class="sello-copa">${CORONA.replace("#2A1C0C", "#F3EADA")}</span><span><strong>${rival} te ganó</strong> <span class="gris">${porQue(x.motivo)}</span></span>` +
-      `<button class="btn-fila dorado" data-revancha="${x.minutos || 10}">Revancha</button>`;
+      `<button class="btn-fila dorado" data-revancha="${x.minutos || 10}" data-rival="${yoBlancas ? x.negras : x.blancas}">Revancha</button>`;
   caja.classList.remove("oculto");
 }
 
@@ -299,7 +305,11 @@ function pintarSalas(salas) {
     const botones = mia
       ? `<button class="btn-fila fantasma" data-abrir="${x.id}">Abrir</button><button class="btn-fila fantasma" data-cancelar="${x.id}" aria-label="Cerrar tu sala">Cerrar</button>`
       : `<button class="btn-fila dorado" data-unirse="${x.id}">Unirse</button>`;
-    return `<div class="fila">${ficha(x.blancas)}<div><strong>${esc(mia ? "Tu sala" : nombres[x.blancas] || "Jugador")}</strong><small>${hace(x.creada)}</small></div>` +
+    const titulo = mia
+      ? (x.reservada_para ? `Tu sala para ${nombres[x.reservada_para] || "tu rival"}` : "Tu sala")
+      : (nombres[x.blancas] || "Jugador");
+    const sub = !mia && x.reservada_para === yo ? '<span class="etiqueta-apartada">Te apartó esta mesa</span>' : hace(x.creada);
+    return `<div class="fila">${ficha(x.blancas)}<div><strong>${esc(titulo)}</strong><small>${sub}</small></div>` +
       `<span class="reloj-chip">${ICONO_RELOJ}${textoTiempo(x.minutos)}</span>${botones}</div>`;
   }).join("");
 }
@@ -421,16 +431,12 @@ $("inicio").addEventListener("click", async (e) => {
   if (b.dataset.abrir) return irAPartida(b.dataset.abrir);
   if (b.dataset.retar) {
     b.disabled = true;
-    const { data, error } = await sb.rpc("crear_partida", { p_minutos: minutosElegidos });
-    if (error) { b.disabled = false; return avisar("No se pudo crear la partida. Intenta de nuevo."); }
-    const para = b.dataset.retar;
-    await irAPartida(data);
-    return llamar(para);
+    const ok = await crearMesa(minutosElegidos, b.dataset.retar);
+    if (!ok) b.disabled = false;
+    return;
   }
   if (b.dataset.revancha) {
-    const { data, error } = await sb.rpc("crear_partida", { p_minutos: Number(b.dataset.revancha) });
-    if (error) return avisar("No se pudo crear la partida. Intenta de nuevo.");
-    return irAPartida(data);
+    return crearMesa(Number(b.dataset.revancha), b.dataset.rival || null);
   }
   if (b.dataset.unirse) {
     b.disabled = true;
@@ -466,7 +472,7 @@ function escucharClub() {
         enLinea[id] = { nombre: m.nombre || nombres[id] || "Jugador", jugando: metas.some((x) => x.jugando) };
         if (m.avatar) avatares[id] = m.avatar;
       }
-      if (!$("inicio").classList.contains("oculto")) pintarEnLinea();
+      if (!$("inicio").classList.contains("oculto")) { pintarEnLinea(); pintarRivales(ultimaMesa); }
       if (partida && partida.estado === "esperando" && miColor() === "w") pintarLlamables();
     })
     .subscribe((estado) => {
@@ -487,6 +493,16 @@ function actualizarPresencia() {
   if (estoyJugando() !== presenciaJugando) presenciaEstado(presenciaDonde);
 }
 setInterval(() => { if (yo && !$("inicio").classList.contains("oculto")) { pintarSalas(ultimasSalas); } }, 60000);
+
+// ---------- Elegir rival ----------
+function pintarRivales(mesa) {
+  const sel = $("rival");
+  const antes = sel.value;
+  const otros = mesa.filter((m) => m.id !== yo).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  sel.innerHTML = '<option value="">Cualquiera del club</option>' +
+    otros.map((m) => `<option value="${m.id}">${esc(m.nombre)}${enLinea[m.id] ? " · conectado" : ""}</option>`).join("");
+  if (otros.some((m) => m.id === antes)) sel.value = antes;
+}
 
 // ---------- Invitar al club ----------
 let claveClub = null;
@@ -530,7 +546,12 @@ function enviar(evento, payload) {
 }
 
 function pintarLlamables() {
-  const otros = Object.keys(enLinea).filter((id) => id !== yo);
+  const apartada = partida && partida.reservada_para;
+  const otros = Object.keys(enLinea).filter((id) => id !== yo && (!apartada || id === apartada));
+  if (apartada && !otros.length) {
+    $("llamables").innerHTML = `<p class="vacio">Mesa apartada para <strong>${esc(nombres[apartada] || "tu rival")}</strong>. Todavía no se conecta; cuando entre, verá tu mesa en su inicio.</p>`;
+    return;
+  }
   if (!otros.length) {
     $("llamables").innerHTML = '<p class="vacio">No hay nadie más conectado ahorita. Usa el link de abajo.</p>';
     return;
@@ -689,7 +710,7 @@ async function abrirPartida(id) {
     return mostrar("inicio");
   }
   partida = data;
-  await cargarNombres([partida.blancas, partida.negras]);
+  await cargarNombres([partida.blancas, partida.negras, partida.reservada_para]);
   cargarChat(id);
   dibujar();
 
@@ -931,11 +952,10 @@ $("final").addEventListener("click", (e) => { if (e.target.id === "final") cerra
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("final").classList.contains("oculto")) cerrarFinal(); });
 function cerrarFinal() { $("final").classList.add("oculto"); confeti = []; }
 $("final-revancha").addEventListener("click", async () => {
-  const { data, error } = await sb.rpc("crear_partida", { p_minutos: partida.minutos || 10 });
-  if (error) return avisar("No se pudo crear la partida. Intenta de nuevo.");
+  const rival = partida.blancas === yo ? partida.negras : partida.blancas;
   cerrarFinal();
-  irAPartida(data);
-  avisar("Mesa nueva lista. Copia el link y mándaselo a tu rival.");
+  const ok = await crearMesa(partida.minutos || 10, rival);
+  if (ok) avisar(`Mesa nueva apartada para ${nombres[rival] || "tu rival"}.`);
 });
 
 let confeti = [];
@@ -981,15 +1001,18 @@ function dibujar() {
   if (partida.estado === "esperando" && color === "w") pintarLlamables();
   else colgarTodas();
   actualizarPresencia();
-  $("unirse").classList.toggle("oculto", !(partida.estado === "esperando" && color !== "w"));
+  $("unirse").classList.toggle("oculto", !(partida.estado === "esperando" && color !== "w" && (!partida.reservada_para || partida.reservada_para === yo)));
   $("acciones-juego").classList.toggle("oculto", !(jugando && color));
   pintarTablas(color);
   $("form-chat").classList.toggle("oculto", !color);
+  textoChatVacio();
   avisarTurno(color, turno);
   $("nueva").classList.toggle("oculto", partida.estado !== "terminada" && !!color);
   if (partida.estado === "esperando") {
     estado.textContent = color === "w"
-      ? "Esperando rival. Llama a alguien que esté conectado o mándale el link."
+      ? (partida.reservada_para
+          ? `Mesa apartada para ${nombres[partida.reservada_para] || "tu rival"}. Llámale si está conectado o mándale el link.`
+          : "Esperando rival. Llama a alguien que esté conectado o mándale el link.")
       : `${nombres[partida.blancas] || "Alguien"} te espera en esta mesa.`;
   } else if (partida.estado === "terminada") {
     estado.textContent = textoFinal();
@@ -1251,7 +1274,8 @@ async function cargarChat(id) {
   const { data } = await sb.from("mensajes").select("*").eq("partida", id).order("id", { ascending: true }).limit(200);
   if (chatDe !== id) return;
   (data || []).forEach((m) => agregarMensaje(m, false));
-  if (!(data || []).length) $("mensajes").innerHTML = '<p class="vacio" id="chat-vacio">Saluda a tu rival.</p>';
+  if (!(data || []).length) $("mensajes").innerHTML = '<p class="vacio" id="chat-vacio"></p>';
+  textoChatVacio();
 }
 function agregarMensaje(m, nuevo) {
   if (!m || m.partida !== chatDe || vistos.has(m.id)) return;
@@ -1279,6 +1303,17 @@ $("form-chat").addEventListener("submit", async (e) => {
   if (error) { input.value = texto; return avisar("No se pudo enviar el mensaje."); }
   agregarMensaje(data, false);
 });
+
+function textoChatVacio() {
+  const el = $("chat-vacio");
+  if (!el || !partida) return;
+  const c = miColor();
+  const rival = c === "w" ? partida.negras : c === "b" ? partida.blancas : null;
+  el.textContent = !c ? "Todavía no hay mensajes."
+    : rival ? `Saluda a ${nombres[rival] || "tu rival"}.`
+    : partida.reservada_para ? `Cuando llegue ${nombres[partida.reservada_para] || "tu rival"}, aquí podrán platicar.`
+    : "Cuando llegue tu rival, aquí podrán platicar.";
+}
 
 // ---------- Avisos ----------
 let jugadasVistas = { id: null, n: 0 };
