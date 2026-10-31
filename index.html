@@ -185,6 +185,22 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   border: 1px solid rgba(233,220,195,0.14);
   box-shadow: inset 0 1px 0 rgba(255,240,215,0.14), inset 0 -24px 48px rgba(20,12,6,0.28), 0 2px 4px rgba(10,6,3,0.4), 0 18px 40px rgba(10,6,3,0.35); }
 @media (max-width: 640px) { .escena { padding: 28px 16px 22px; border-radius: 20px; } }
+.escena { position: relative; }
+.maximizar { position: absolute; right: 12px; bottom: 12px; width: 40px; height: 40px; padding: 0; border-radius: 12px; border: 1px solid rgba(255,240,215,0.22);
+  background: rgba(28,19,12,0.55); color: #F3EADA; display: grid; place-items: center; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(10,6,3,0.35); transition: background-color 160ms ease, transform 180ms var(--resorte); }
+.maximizar:hover { background: rgba(28,19,12,0.8); transform: scale(1.06); }
+.maximizar svg { width: 20px; height: 20px; }
+.maximizar .icono-cerrar { display: none; }
+/* Modo tablero grande: solo el tablero y los relojes ocupan la pantalla */
+body.enfoque header, body.enfoque .lateral, body.enfoque .barra-vista { display: none !important; }
+body.enfoque .envoltura { max-width: none; padding: 8px 16px; }
+body.enfoque #partida { grid-template-columns: 1fr; }
+body.enfoque .zona-tablero { gap: 8px; }
+body.enfoque .escena { max-width: min(96vw, calc(100vh - 240px)); padding: 32px 28px 24px; }
+body.enfoque .jugador, body.enfoque .hud { max-width: min(96vw, calc(100vh - 240px)); }
+body.enfoque .maximizar .icono-abrir { display: none; }
+body.enfoque .maximizar .icono-cerrar { display: inline; }
 .marco { background: #4A2F1C; padding: 12px; border-radius: 14px; transform-origin: 50% 100%; transform-style: preserve-3d; box-shadow: var(--sombra-2); transition: transform 200ms var(--resorte); }
 .tablero { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); aspect-ratio: 1 / 1; transform-style: preserve-3d; }
 .casilla { position: relative; border: 0; padding: 0; transform-style: preserve-3d; cursor: default; }
@@ -582,7 +598,9 @@ form { display: flex; flex-direction: column; gap: 16px; }
       <div class="zona-tablero">
         <div class="jugador" id="arriba"></div>
         <div class="hud" id="hud" aria-live="polite"></div>
-        <div class="escena"><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div></div>
+        <div class="escena"><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div>
+          <button type="button" id="maximizar" class="maximizar" aria-label="Agrandar el tablero a pantalla completa" aria-pressed="false" title="Pantalla completa"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="icono-abrir" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="icono-cerrar" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
+        </div>
         <div class="jugador" id="abajo"></div>
         <div class="barra-vista">
           <div class="vista-fila">

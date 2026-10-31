@@ -36,6 +36,7 @@ const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
 function mostrar(vista) {
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
+  if (vista !== "partida" && document.body.classList.contains("enfoque")) ponerEnfoque(false);
   if (vista === "inicio") {
     if (canal) { sb.removeChannel(canal); canal = null; }
     partida = null;
@@ -1370,6 +1371,22 @@ function tic(frecuencia) {
     o.connect(g).connect(audioTic.destination); o.start(t); o.stop(t + 0.16);
   } catch {}
 }
+
+// ---------- Tablero a pantalla completa ----------
+function ponerEnfoque(activar) {
+  document.body.classList.toggle("enfoque", activar);
+  const b = $("maximizar");
+  b.setAttribute("aria-pressed", String(activar));
+  b.setAttribute("aria-label", activar ? "Salir de pantalla completa" : "Agrandar el tablero a pantalla completa");
+  b.title = activar ? "Salir (Esc)" : "Pantalla completa";
+  try {
+    if (activar && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    if (!activar && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  } catch {}
+}
+$("maximizar").addEventListener("click", () => ponerEnfoque(!document.body.classList.contains("enfoque")));
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("enfoque")) ponerEnfoque(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("enfoque")) ponerEnfoque(false); });
 
 // ---------- Vista personal (solo en este navegador) ----------
 function aplicarAngulo() {
