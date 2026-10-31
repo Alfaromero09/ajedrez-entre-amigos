@@ -746,6 +746,7 @@ async function abrirPartida(id) {
   partida = data;
   await cargarNombres([partida.blancas, partida.negras, partida.reservada_para]);
   cargarChat(id);
+  pintarMesaPartida();
   dibujar();
 
   if (canal) sb.removeChannel(canal);
@@ -1112,6 +1113,7 @@ function dibujar() {
   pintarHud(juego, color, turno, material);
   estado.classList.toggle("cierre", partida.estado === "terminada");
   revisarFinal();
+  if (mesaPartidaDe && mesaPartidaDe !== `${partida.id}:${partida.estado}`) pintarMesaPartida();
 
   const lista = $("jugadas");
   lista.innerHTML = "";
@@ -1370,6 +1372,44 @@ function tic(frecuencia) {
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
     o.connect(g).connect(audioTic.destination); o.start(t); o.stop(t + 0.16);
   } catch {}
+}
+
+// ---------- Mesa del club junto al tablero (solo informativa) ----------
+let mesaPartidaDe = null;
+async function pintarMesaPartida() {
+  if (!partida) return;
+  const id = partida.id;
+  const a = partida.blancas, b = partida.negras;
+  const [mesaR, caraR] = await Promise.all([
+    sb.rpc("mesa_del_club"),
+    b ? sb.from("partidas").select("blancas, negras, resultado").eq("estado", "terminada").not("resultado", "is", null)
+          .or(`and(blancas.eq.${a},negras.eq.${b}),and(blancas.eq.${b},negras.eq.${a})`)
+      : Promise.resolve({ data: [] }),
+  ]);
+  if (!partida || partida.id !== id) return;
+  mesaPartidaDe = `${id}:${partida.estado}`;
+  const filas = (mesaR.data || []).filter((m) => m.pj > 0 || m.id === a || m.id === b);
+  let pos = 0, previo = null;
+  const conPos = filas.map((m, i) => { if (m.pts !== previo) { pos = i + 1; previo = m.pts; } return { ...m, pos }; });
+  const visibles = conPos.filter((m, i) => i < 8 || m.id === a || m.id === b);
+  const sobran = conPos.length - visibles.length;
+  $("mesa-partida").innerHTML = visibles.map((m) =>
+    `<li class="${m.id === a || m.id === b ? "juega" : ""}"><span class="pos">${m.pos}</span><span class="nom">${esc(m.id === yo ? "Tú" : m.nombre)}</span><span class="pts">${m.pts}</span></li>`).join("") +
+    (sobran > 0 ? `<li class="mas">y ${sobran} más</li>` : "") ||
+    '<li class="mas">Aún no hay partidas terminadas.</li>';
+  const cara = caraR.data || [];
+  const caja = $("cara-a-cara");
+  if (!b || !cara.length) { caja.classList.add("oculto"); return; }
+  let ga = 0, gb = 0;
+  for (const x of cara) {
+    if (x.resultado === "½-½") continue;
+    const gano = x.resultado === "1-0" ? x.blancas : x.negras;
+    if (gano === a) ga++; else if (gano === b) gb++;
+  }
+  const t = cara.length - ga - gb;
+  const na = a === yo ? "Tú" : nombres[a] || "Blancas", nb = b === yo ? "Tú" : nombres[b] || "Negras";
+  caja.innerHTML = `<span>Cara a cara</span><strong>${ga} – ${gb}</strong><span>${esc(na)} vs ${esc(nb)}${t ? ` · ${t} ${t === 1 ? "tablas" : "tablas"}` : ""}</span>`;
+  caja.classList.remove("oculto");
 }
 
 // ---------- Tablero a pantalla completa ----------

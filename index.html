@@ -171,6 +171,27 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 @media (max-width: 640px) { .mesas { grid-template-columns: 1fr; } .mesas-col:first-child { padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--linea); } .mesas-col:last-child { padding: 10px 0 0; } .barra-nueva .primario { width: 100%; } }
 
 #partida { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 24px; align-items: start; }
+/* Columna izquierda informativa: solo aparece en pantallas anchas */
+.lateral-izq { display: none; }
+@media (min-width: 1480px) {
+  .envoltura:has(#partida:not(.oculto)) { max-width: 1560px; }
+  #partida { grid-template-columns: 210px minmax(0, 1fr) minmax(300px, 360px); }
+  .lateral-izq { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 16px; padding: 14px 12px; border-radius: 16px; background: rgba(42,28,19,0.55); border: 1px solid var(--linea); }
+}
+.lateral-izq h2 { font-size: 15px; letter-spacing: -0.01em; color: var(--suave); padding: 0 4px; }
+.mini-mesa { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.mini-mesa li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 4px; border-radius: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.mini-mesa .pos { color: var(--laton-claro); font-family: "Fraunces", serif; font-size: 13px; }
+.mini-mesa .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #CDBB9F; }
+.mini-mesa .pts { color: var(--texto); font-weight: 600; }
+.mini-mesa li.juega { background: rgba(205,165,78,0.10); }
+.mini-mesa li.juega .nom { color: var(--texto); }
+.mini-mesa li.juega .nom::after { content: " ●"; color: var(--laton-claro); font-size: 9px; vertical-align: 2px; }
+.mini-mesa .mas { justify-content: center; color: var(--suave); font-size: 12px; }
+.cara { margin-top: 6px; padding: 8px 4px 0; border-top: 1px solid var(--linea); display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--suave); }
+.cara strong { font-family: "Fraunces", serif; font-weight: 500; font-size: 18px; color: var(--texto); font-variant-numeric: tabular-nums; }
+body.enfoque .lateral-izq { display: none !important; }
+body.enfoque #partida { grid-template-columns: 1fr !important; }
 @media (max-width: 760px) { #partida { grid-template-columns: 1fr; } }
 .zona-tablero { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .jugador { width: 100%; max-width: 600px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -595,6 +616,11 @@ form { display: flex; flex-direction: column; gap: 16px; }
     </section>
 
     <section id="partida" class="oculto">
+      <aside class="lateral-izq" aria-label="La mesa del club">
+        <h2>La mesa del club</h2>
+        <ol id="mesa-partida" class="mini-mesa"></ol>
+        <div id="cara-a-cara" class="cara oculto"></div>
+      </aside>
       <div class="zona-tablero">
         <div class="jugador" id="arriba"></div>
         <div class="hud" id="hud" aria-live="polite"></div>
