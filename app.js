@@ -286,7 +286,6 @@ async function entrar(usuario) {
   setInterval(marcarConexion, 4 * 60000);
   cargarMiembros();
   escucharClub();
-  cargarChatClub();
   const id = idDeLaUrl();
   if (id) abrirPartida(id);
   else mostrar("inicio");
@@ -628,7 +627,7 @@ function escucharClub() {
   if (canalClub) return;
   canalClub = sb.channel("club", { config: { presence: { key: yo } } })
     .on("postgres_changes", { event: "*", schema: "public", table: "partidas" }, refrescarClub)
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensajes_club" }, ({ new: m }) => agregarClub(m, true))
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensajes_privados", filter: `para=eq.${yo}` }, ({ new: m }) => recibirPrivado(m))
     .on("broadcast", { event: "llamada" }, ({ payload }) => recibirLlamada(payload))
     .on("broadcast", { event: "respuesta" }, ({ payload }) => recibirRespuesta(payload))
     .on("broadcast", { event: "colgar" }, ({ payload }) => { if (llamadaEntrante && llamadaEntrante.id === payload.id) cerrarLlamada(); })
@@ -2120,10 +2119,14 @@ function pintarLineaPartida() {
     const lado = id === rivalActual ? '<span class="izq-ocupado" style="color:#A9CB9A">CONTIGO</span>'
       : u.jugando ? '<span class="izq-ocupado">OCUPADO</span>'
       : `<button type="button" class="izq-jugar" data-retar-izq="${id}" aria-label="Retar a ${esc(u.nombre)}">Jugar</button>`;
-    return `<div class="izq-fila">${ficha(id, "punto-verde")}<div><strong>${esc(u.nombre)}</strong><small>${id === rivalActual ? "En esta partida" : u.jugando ? "Jugando" : estadoDe(id)}</small></div>${lado}</div>`;
+    const globo = sinLeer[id] ? `<span class="globo">${sinLeer[id]}</span>` : "";
+    const msj = `<button type="button" class="izq-msj" data-privado="${id}" aria-label="Mensaje privado a ${esc(u.nombre)}">${ICONO_MSJ}${globo}</button>`;
+    return `<div class="izq-fila${chatCon === id ? " activa" : ""}">${ficha(id, "punto-verde")}<div><strong>${esc(u.nombre)}</strong><small>${id === rivalActual ? "En esta partida" : u.jugando ? "Jugando" : estadoDe(id)}</small></div><span class="izq-acciones">${msj}${lado}</span></div>`;
   }).join("");
 }
 $("izq-conectados").addEventListener("click", async (e) => {
+  const p = e.target.closest("[data-privado]");
+  if (p) return abrirPrivado(p.dataset.privado);
   const b = e.target.closest("[data-retar-izq]");
   if (!b) return;
   const id = b.dataset.retarIzq;
@@ -2138,45 +2141,68 @@ $("izq-conectados").addEventListener("click", async (e) => {
   if (!ok) b.disabled = false;
 });
 
-// ---------- Chat del club: avisos rápidos entre amigos (últimas 24 horas) ----------
-const vistosClub = new Set();
-async function cargarChatClub() {
-  const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { data, error } = await sb.from("mensajes_club").select("*").gte("creado", desde).order("id", { ascending: true }).limit(60);
-  if (error) return;
-  await cargarNombres([...new Set((data || []).map((m) => m.autor))]);
+// ---------- Mensajes privados: solo entre dos jugadores ----------
+let chatCon = null;                 // con quién está abierta la conversación
+const sinLeer = {};                 // id -> mensajes nuevos sin leer
+const vistosPriv = new Set();
+const ICONO_MSJ = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>';
+
+async function abrirPrivado(id) {
+  chatCon = id;
+  delete sinLeer[id];
+  await cargarNombres([id]);
+  $("privado").classList.remove("oculto");
+  $("privado-titulo").textContent = `Con ${nombres[id] || "jugador"}`;
+  $("club-mensajes").innerHTML = '<p class="club-vacio">Cargando…</p>';
+  vistosPriv.clear();
+  const { data } = await sb.from("mensajes_privados").select("*")
+    .or(`and(de.eq.${yo},para.eq.${id}),and(de.eq.${id},para.eq.${yo})`)
+    .order("id", { ascending: false }).limit(40);
+  if (chatCon !== id) return;
   $("club-mensajes").innerHTML = "";
-  vistosClub.clear();
-  (data || []).forEach((m) => agregarClub(m, false));
-  if (!(data || []).length) $("club-mensajes").innerHTML = '<p class="club-vacio" id="club-vacio">Sin mensajes hoy.</p>';
+  (data || []).reverse().forEach((m) => pintarPrivado(m));
+  if (!(data || []).length) $("club-mensajes").innerHTML = `<p class="club-vacio" id="club-vacio">Solo ${esc(nombres[id] || "esta persona")} y tú ven estos mensajes.</p>`;
+  pintarLineaPartida();
+  $("club-texto").focus();
 }
-async function agregarClub(m, nuevo) {
-  if (!m || vistosClub.has(m.id)) return;
-  vistosClub.add(m.id);
-  if (!nombres[m.autor]) await cargarNombres([m.autor]);
+function pintarPrivado(m) {
+  if (vistosPriv.has(m.id)) return;
+  vistosPriv.add(m.id);
   $("club-vacio")?.remove();
-  const mio = m.autor === yo;
-  const caja = $("club-mensajes");
+  const mio = m.de === yo;
   const el = document.createElement("div");
   el.className = `club-msj${mio ? " mio" : ""}`;
   const hora = new Date(m.creado).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-  el.innerHTML = `<b>${esc(mio ? "Tú" : nombres[m.autor] || "Alguien")}</b>${esc(m.texto)}<time>${hora}</time>`;
-  caja.appendChild(el);
-  caja.scrollTop = caja.scrollHeight;
-  if (nuevo && !mio) {
-    sonido("mensaje");
-    if (document.hidden) avisoPestana(`💬 ${nombres[m.autor] || "Alguien"} escribió en el club`);
-  }
+  el.innerHTML = `<b>${esc(mio ? "Tú" : nombres[m.de] || "Jugador")}</b>${esc(m.texto)}<time>${hora}</time>`;
+  $("club-mensajes").appendChild(el);
+  $("club-mensajes").scrollTop = $("club-mensajes").scrollHeight;
 }
+async function recibirPrivado(m) {
+  if (!m || m.para !== yo) return;
+  if (!nombres[m.de]) await cargarNombres([m.de]);
+  sonido("mensaje");
+  if (document.hidden) avisoPestana(`💬 ${nombres[m.de] || "Alguien"} te escribió`);
+  // Si no hay conversación abierta, se abre con quien escribió
+  if (!chatCon) return abrirPrivado(m.de);
+  if (chatCon === m.de) return pintarPrivado(m);
+  sinLeer[m.de] = (sinLeer[m.de] || 0) + 1;
+  avisar(`💬 ${nombres[m.de] || "Alguien"} te mandó un mensaje privado.`);
+  pintarLineaPartida();
+}
+$("privado-cerrar").addEventListener("click", () => {
+  chatCon = null;
+  $("privado").classList.add("oculto");
+  pintarLineaPartida();
+});
 $("form-club").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("club-texto");
   const texto = input.value.trim();
-  if (!texto) return;
+  if (!texto || !chatCon) return;
   input.value = "";
-  const { data, error } = await sb.from("mensajes_club").insert({ texto }).select().single();
-  if (error) { input.value = texto; return avisar("No se pudo enviar el mensaje al club."); }
-  agregarClub(data, false);
+  const { data, error } = await sb.from("mensajes_privados").insert({ para: chatCon, texto }).select().single();
+  if (error) { input.value = texto; return avisar("No se pudo enviar el mensaje."); }
+  pintarPrivado(data);
 });
 
 // ---------- Tablero a pantalla completa ----------
