@@ -176,6 +176,14 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 #partida { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 430px); gap: 24px; align-items: start; }
 /* Columna izquierda informativa: solo aparece en pantallas anchas */
 .lateral-izq { display: none; }
+.lateral-chat { display: none; }
+@media (min-width: 1700px) {
+  .envoltura:has(#partida:not(.oculto)) { max-width: 1900px !important; }
+  #partida { grid-template-columns: 200px minmax(0, 1fr) minmax(340px, 420px) 300px !important; }
+  .lateral-chat { display: flex; flex-direction: column; position: sticky; top: 16px; }
+  .lateral-chat #chat { max-height: calc(100vh - 40px); }
+  .lateral-chat .mensajes { max-height: calc(100vh - 200px); min-height: 220px; }
+}
 @media (min-width: 1480px) {
   .envoltura:has(#partida:not(.oculto)) { max-width: 1560px; }
   #partida { grid-template-columns: 210px minmax(0, 1fr) minmax(340px, 440px); }
@@ -193,7 +201,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .mini-mesa .mas { justify-content: center; color: var(--suave); font-size: 12px; }
 .cara { margin-top: 6px; padding: 8px 4px 0; border-top: 1px solid var(--linea); display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--suave); }
 .cara strong { font-family: "Fraunces", serif; font-weight: 500; font-size: 18px; color: var(--texto); font-variant-numeric: tabular-nums; }
-body.enfoque .lateral-izq { display: none !important; }
+body.enfoque .lateral-izq, body.enfoque .lateral-chat { display: none !important; }
 @media (max-width: 760px) { #partida { grid-template-columns: 1fr; } }
 .zona-tablero { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .jugador { width: 100%; max-width: 600px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -217,7 +225,15 @@ body.enfoque .lateral-izq { display: none !important; }
 .maximizar .icono-cerrar { display: none; }
 /* Modo tablero grande: solo el tablero y los relojes ocupan la pantalla */
 /* Pantalla completa: tablero grande + columna angosta con la cámara del rival y un chat mínimo */
-body.enfoque header, body.enfoque .barra-vista, body.enfoque .lateral > :not(#video):not(#chat) { display: none !important; }
+body.enfoque header, body.enfoque .barra-vista, body.enfoque .lateral > :not(#video):not(#chat):not(#panel-estado) { display: none !important; }
+/* En pantalla completa, del panel de estado solo quedan el botón grande, las opciones de pausa y una oferta de tablas */
+body.enfoque #panel-estado > :not(#control-estado):not(#oferta-tablas) { display: none !important; }
+body.enfoque #panel-estado { padding: 10px; gap: 8px; }
+body.enfoque .pill-estado { height: 42px; font-size: 15px; }
+body.enfoque .menu-estado { padding: 10px; gap: 10px; }
+body.enfoque .menu-opciones button { height: 34px; font-size: 12px; }
+body.enfoque .menu-otro input { height: 32px; }
+body.enfoque .menu-nota { display: none; }
 body.enfoque .lateral { display: flex !important; position: sticky; top: 8px; gap: 10px; }
 body.enfoque .video { padding: 8px; gap: 6px; }
 body.enfoque .video-yo { width: 32%; }
@@ -550,17 +566,19 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .control-estado { display: flex; flex-direction: column; gap: 10px; }
 .pill-estado { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 52px; border-radius: 14px; border: 0; font-size: 18px; font-weight: 700; letter-spacing: 0.08em; transition: filter 160ms ease, transform 180ms var(--resorte); }
 .pill-estado:hover { filter: brightness(1.08); }
-.pill-estado .pill-flecha { width: 18px; height: 18px; margin-left: 4px; transition: transform 200ms ease; }
+.pill-estado .pill-flecha { display: none; }
+.pill-estado:disabled { opacity: 1; cursor: default; transform: none; }
+.pill-estado:hover { filter: none; }
+#pill-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 85%; }
 .pill-estado[aria-expanded="true"] .pill-flecha { transform: rotate(180deg); }
 .pill-estado.jugando { background: #7FA86E; color: #13200E; box-shadow: 0 8px 22px rgba(127,168,110,0.3); }
 .pill-estado.pausada { background: #E2B33C; color: #2A1C0C; box-shadow: 0 8px 22px rgba(226,179,60,0.32); }
 .pill-estado.cancelada { background: #C9603F; color: #FFF4EC; box-shadow: 0 8px 22px rgba(201,96,63,0.3); cursor: default; }
-.pill-estado.cancelada .pill-flecha { display: none; }
 .pill-icono { width: 14px; height: 14px; flex: none; }
 .pill-estado.jugando .pill-icono { width: 0; height: 0; border-left: 13px solid currentColor; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
 .pill-estado.pausada .pill-icono { border-left: 4px solid currentColor; border-right: 4px solid currentColor; width: 14px; }
 .pill-estado.cancelada .pill-icono { background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
-.menu-estado { display: flex; flex-direction: column; gap: 14px; padding: 14px; border-radius: 12px; background: #1F150E; border: 1px solid var(--linea); animation: subir 300ms var(--resorte) both; }
+.menu-estado { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 12px; background: #1F150E; border: 1px solid var(--linea); }
 .menu-grupo { display: flex; flex-direction: column; gap: 8px; }
 .menu-titulo { font-size: 13px; font-weight: 600; color: var(--suave); }
 .menu-opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
@@ -838,7 +856,7 @@ button.cargando::after { content: ""; position: absolute; inset: 0; margin: auto
           </div>
           <p class="video-nota" id="video-nota">Todo empieza apagado. Enciende tu cámara o micrófono cuando quieras.</p>
         </div>
-        <div class="panel">
+        <div class="panel" id="panel-estado">
           <div id="control-estado" class="control-estado oculto">
             <button type="button" id="pill-estado" class="pill-estado jugando" aria-expanded="false" aria-controls="menu-estado">
               <span class="pill-icono" aria-hidden="true"></span><span id="pill-texto">PLAYING</span>
@@ -904,6 +922,7 @@ button.cargando::after { content: ""; position: absolute; inset: 0; margin: auto
           <ol id="jugadas"></ol>
         </div>
       </aside>
+      <aside class="lateral-chat" id="lateral-chat" aria-label="Chat de la partida"></aside>
     </section>
   </main>
 </div>

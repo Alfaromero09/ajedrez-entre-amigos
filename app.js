@@ -1727,6 +1727,7 @@ let canalListo = false;
 let pc = null;            // conexión con el rival
 let videoDe = null;       // id de la partida con video activo
 let pendientesIce = [];
+let iceAdelantados = [];  // candidatos que llegan antes que su oferta
 let sesionRtc = 0;       // identifica cada negociación para ignorar mensajes viejos
 let ultimaOferta = 0;
 let local = { video: null, audio: null };
@@ -1807,6 +1808,8 @@ async function recibirRtc(m) {
     } else if (m.tipo === "oferta" && miColor() === "b") {
       sesionRtc = m.sesion;
       nuevaConexion();
+      pendientesIce = iceAdelantados.filter((x) => x.sesion === m.sesion).map((x) => x.candidato);
+      iceAdelantados = [];
       await pc.setRemoteDescription(m.sdp);
       for (const c of pendientesIce) await pc.addIceCandidate(c).catch(() => {});
       pendientesIce = [];
@@ -1818,7 +1821,10 @@ async function recibirRtc(m) {
       for (const c of pendientesIce) await pc.addIceCandidate(c).catch(() => {});
       pendientesIce = [];
     } else if (m.tipo === "ice") {
-      if (m.sesion !== sesionRtc) return;
+      if (m.sesion !== sesionRtc) {
+        if (m.sesion > sesionRtc) iceAdelantados.push(m);
+        return;
+      }
       if (pc && pc.remoteDescription) await pc.addIceCandidate(m.candidato).catch(() => {});
       else pendientesIce.push(m.candidato);
     } else if (m.tipo === "medios") {
@@ -1977,9 +1983,12 @@ function pintarControlEstado(color) {
   const pill = $("pill-estado");
   const tipo = cancelada ? "cancelada" : partida.estado === "pausada" ? "pausada" : "jugando";
   pill.className = `pill-estado ${tipo}`;
-  $("pill-texto").textContent = { jugando: "PLAYING", pausada: "PAUSA", cancelada: "CANCELADA" }[tipo];
-  pill.disabled = cancelada;
-  if (cancelada || partida.estado === "terminada") cerrarMenuEstado();
+  // El estado activo siempre a la vista, en grande: PLAYING, el motivo de la pausa o CANCELADA
+  $("pill-texto").textContent = tipo === "pausada"
+    ? (partida.pausa_motivo || "PAUSA").toUpperCase()
+    : { jugando: "PLAYING", cancelada: "CANCELADA" }[tipo];
+  pill.disabled = true;
+  $("menu-estado").classList.toggle("oculto", !(partida.estado === "jugando" || partida.estado === "pausada"));
   $("menu-pausar").classList.toggle("oculto", partida.estado !== "jugando");
   $("menu-reanudar").classList.toggle("oculto", partida.estado !== "pausada");
   $("reanudar").disabled = !puedoReanudar();
@@ -2006,15 +2015,7 @@ function pintarCuentaPausa() {
   // Cuando se cumple el tiempo, al rival se le habilita reanudar
   if (falta === 0 && $("reanudar").disabled && puedoReanudar()) dibujar();
 }
-function cerrarMenuEstado() {
-  $("menu-estado").classList.add("oculto");
-  $("pill-estado").setAttribute("aria-expanded", "false");
-}
-$("pill-estado").addEventListener("click", () => {
-  const abrir = $("menu-estado").classList.contains("oculto");
-  $("menu-estado").classList.toggle("oculto", !abrir);
-  $("pill-estado").setAttribute("aria-expanded", String(abrir));
-});
+function cerrarMenuEstado() {}
 async function pausar(motivo, minutos) {
   const { error } = await sb.rpc("pausar_partida", { p: partida.id, p_motivo: motivo, p_minutos: minutos || null });
   if (error) return avisar("No se pudo pausar. Intenta de nuevo.");
@@ -2044,9 +2045,27 @@ $("cancelar-juego").addEventListener("click", async () => {
   cerrarMenuEstado();
 });
 
+// ---------- Dónde va el chat ----------
+// En pantallas muy anchas tiene su propia columna; si no, va justo debajo de la cámara
+const pantallaAncha = matchMedia("(min-width: 1700px)");
+function ubicarChat() {
+  const chat = $("chat");
+  const enfoque = document.body.classList.contains("enfoque");
+  if (pantallaAncha.matches && !enfoque) {
+    if (chat.parentElement !== $("lateral-chat")) $("lateral-chat").appendChild(chat);
+  } else {
+    const despues = $("video");
+    if (chat.previousElementSibling !== despues) despues.after(chat);
+  }
+  $("mensajes").scrollTop = $("mensajes").scrollHeight;
+}
+pantallaAncha.addEventListener?.("change", ubicarChat);
+ubicarChat();
+
 // ---------- Tablero a pantalla completa ----------
 function ponerEnfoque(activar) {
   document.body.classList.toggle("enfoque", activar);
+  ubicarChat();
   const b = $("maximizar");
   b.setAttribute("aria-pressed", String(activar));
   b.setAttribute("aria-label", activar ? "Salir de pantalla completa" : "Agrandar el tablero a pantalla completa");
