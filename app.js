@@ -753,7 +753,6 @@ const ESPERA_LLAMADA = 30000;
 const llamando = {};          // para -> { id, partida, timer }
 let llamadaEntrante = null;   // { id, de, nombre, partida, minutos }
 let cuentaLlamada = null;
-let timbre = null;
 
 function enviar(evento, payload) {
   if (!canalClub) return;
@@ -794,6 +793,7 @@ function llamar(para) {
   if (!partida || partida.estado !== "esperando" || miColor() !== "w" || llamando[para]) return;
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   enviar("llamada", { id, de: yo, para, nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", foto: fotos[yo] || null, partida: partida.id, minutos: partida.minutos || 10 });
+  timbreRepetido("llamando");
   llamando[para] = {
     id,
     timer: setTimeout(() => {
@@ -807,6 +807,7 @@ function llamar(para) {
 function colgar(para) {
   const l = llamando[para];
   if (!l) return;
+  if (Object.keys(llamando).length <= 1 && !llamadaEntrante) callar();
   clearTimeout(l.timer);
   delete llamando[para];
   enviar("colgar", { id: l.id });
@@ -820,6 +821,8 @@ function recibirRespuesta(r) {
   if (!l || l.id !== r.id) return;
   clearTimeout(l.timer);
   delete llamando[r.de];
+  if (!Object.keys(llamando).length) callar();
+  sonido(r.respuesta === "si" ? "aceptada" : "rechazada");
   const n = enLinea[r.de]?.nombre || nombres[r.de] || "Tu amigo";
   if (r.respuesta === "si") avisar(`¡${n} aceptó! Ya viene a la mesa.`);
   else if (r.respuesta === "ocupado") avisar(`${n} está en otra partida. Inténtalo al rato.`);
@@ -882,33 +885,106 @@ $("llamada-si").addEventListener("click", async () => {
   irAPartida(l.partida);
 });
 
-// Timbre suave hecho con el navegador (sin archivos de audio)
-function sonar() {
-  callar();
-  let ctx;
-  try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
-  const tono = () => {
-    const t = ctx.currentTime;
-    [[659, 0], [880, 0.18], [659, 0.6], [880, 0.78]].forEach(([f, d]) => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = "sine"; o.frequency.value = f;
-      g.gain.setValueAtTime(0, t + d);
-      g.gain.linearRampToValueAtTime(0.12, t + d + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, t + d + 0.16);
-      o.connect(g).connect(ctx.destination);
-      o.start(t + d); o.stop(t + d + 0.18);
-    });
-  };
-  tono();
-  timbre = { ctx, intervalo: setInterval(tono, 2600) };
-}
-function callar() {
-  if (!timbre) return;
-  clearInterval(timbre.intervalo);
-  timbre.ctx.close().catch(() => {});
-  timbre = null;
-}
 window.addEventListener("beforeunload", colgarTodas);
+
+// ---------- Sonidos del club (hechos con el navegador, sin archivos) ----------
+const AUDIO = { ctx: null, master: null, volumen: 0.6, mudo: false };
+try {
+  const g = JSON.parse(localStorage.getItem("ajedrez-sonido") || "null");
+  if (g) { AUDIO.volumen = Math.min(1, Math.max(0, Number(g.volumen) || 0)); AUDIO.mudo = !!g.mudo; }
+} catch {}
+function audio() {
+  if (!AUDIO.ctx) {
+    try {
+      AUDIO.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      AUDIO.master = AUDIO.ctx.createGain();
+      AUDIO.master.connect(AUDIO.ctx.destination);
+      aplicarVolumen();
+    } catch { return null; }
+  }
+  if (AUDIO.ctx.state === "suspended") AUDIO.ctx.resume().catch(() => {});
+  return AUDIO.ctx;
+}
+function aplicarVolumen() {
+  if (AUDIO.master) AUDIO.master.gain.setTargetAtTime(AUDIO.mudo ? 0 : AUDIO.volumen * AUDIO.volumen, AUDIO.ctx.currentTime, 0.02);
+  try { localStorage.setItem("ajedrez-sonido", JSON.stringify({ volumen: AUDIO.volumen, mudo: AUDIO.mudo })); } catch {}
+  pintarBocina();
+}
+// Los navegadores solo dejan sonar después de un primer toque en la página
+["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => audio(), { once: true, capture: true }));
+
+// Una nota suave: frecuencia, inicio, duración, volumen, forma de onda
+function nota(f, inicio = 0, dur = 0.16, vol = 0.5, tipo = "sine") {
+  const ctx = audio();
+  if (!ctx || AUDIO.mudo) return;
+  const t = ctx.currentTime + inicio, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = tipo; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol * 0.25, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(AUDIO.master);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+const SONIDOS = {
+  turno:     () => nota(660, 0, 0.14, 0.45, "triangle"),
+  mensaje:   () => { nota(880, 0, 0.09, 0.35); nota(1175, 0.08, 0.12, 0.3); },
+  pausa:     () => { nota(784, 0, 0.18, 0.45); nota(587, 0.16, 0.26, 0.4); },
+  reanudar:  () => { nota(587, 0, 0.14, 0.45); nota(784, 0.12, 0.14, 0.45); nota(988, 0.24, 0.22, 0.4); },
+  cancelada: () => { nota(392, 0, 0.22, 0.45, "triangle"); nota(262, 0.18, 0.34, 0.4, "triangle"); },
+  tablas:    () => { nota(659, 0, 0.2, 0.4); nota(659, 0.22, 0.2, 0.35); },
+  tiempo:    () => { nota(988, 0, 0.08, 0.4, "square"); nota(988, 0.16, 0.08, 0.35, "square"); },
+  victoria:  () => [523, 659, 784, 1047].forEach((f, i) => nota(f, i * 0.11, i === 3 ? 0.5 : 0.16, 0.5, "triangle")),
+  derrota:   () => [523, 440, 349].forEach((f, i) => nota(f, i * 0.16, i === 2 ? 0.45 : 0.18, 0.4, "triangle")),
+  aceptada:  () => { nota(784, 0, 0.12, 0.45); nota(1047, 0.1, 0.22, 0.45); },
+  rechazada: () => nota(330, 0, 0.3, 0.4, "triangle"),
+  prueba:    () => { nota(659, 0, 0.14, 0.5); nota(880, 0.12, 0.2, 0.5); },
+};
+function sonido(nombre) { try { SONIDOS[nombre]?.(); } catch {} }
+
+// Timbres que se repiten: entrante (como teléfono discreto) y llamando (tono de espera)
+let timbre = null;
+function timbreRepetido(tipo) {
+  callar();
+  const toque = tipo === "entrante"
+    ? () => { [0, 0.09, 0.18, 0.27, 0.36, 0.45].forEach((d, i) => nota(i % 2 ? 1046 : 1318, d, 0.08, 0.38)); [0, 0.09, 0.18, 0.27, 0.36, 0.45].forEach((d, i) => nota(i % 2 ? 1046 : 1318, 0.75 + d, 0.08, 0.38)); }
+    : () => { nota(440, 0, 0.9, 0.3); nota(480, 0, 0.9, 0.22); };
+  toque();
+  timbre = setInterval(toque, tipo === "entrante" ? 2800 : 3000);
+}
+function sonar() { timbreRepetido("entrante"); }
+function callar() { if (timbre) { clearInterval(timbre); timbre = null; } }
+function tic() { sonido("turno"); }
+
+// ---------- Bocina flotante: siempre visible ----------
+function pintarBocina() {
+  const b = $("bocina");
+  if (!b) return;
+  const apagada = AUDIO.mudo || AUDIO.volumen === 0;
+  b.classList.toggle("apagada", apagada);
+  b.setAttribute("aria-label", apagada ? "Sonidos apagados. Abrir controles de volumen" : "Sonidos encendidos. Abrir controles de volumen");
+  $("bocina-ondas").style.display = apagada ? "none" : "";
+  $("bocina-x").style.display = apagada ? "" : "none";
+  $("volumen").value = Math.round(AUDIO.volumen * 100);
+  $("volumen-valor").textContent = `${Math.round(AUDIO.volumen * 100)}%`;
+  $("silenciar").textContent = AUDIO.mudo ? "Activar sonidos" : "Silenciar";
+}
+$("bocina").addEventListener("click", () => {
+  const abrir = $("bocina-panel").classList.contains("oculto");
+  $("bocina-panel").classList.toggle("oculto", !abrir);
+  $("bocina").setAttribute("aria-expanded", String(abrir));
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".bocina-caja")) { $("bocina-panel").classList.add("oculto"); $("bocina").setAttribute("aria-expanded", "false"); }
+});
+$("volumen").addEventListener("input", (e) => {
+  AUDIO.volumen = Number(e.target.value) / 100;
+  if (AUDIO.volumen > 0) AUDIO.mudo = false;
+  audio(); aplicarVolumen();
+});
+$("volumen").addEventListener("change", () => sonido("prueba"));
+$("silenciar").addEventListener("click", () => { AUDIO.mudo = !AUDIO.mudo; audio(); aplicarVolumen(); if (!AUDIO.mudo) sonido("prueba"); });
+$("probar-sonido").addEventListener("click", () => { audio(); sonido("prueba"); });
+pintarBocina();
 
 // ---------- Partida ----------
 async function recargar(id) {
@@ -1045,6 +1121,7 @@ function actualizarRelojes() {
     if (c === miColor() && partida.estado === "jugando" && r[c] < umbral && r[c] > 0 && !avisosTiempo.has(partida.id)) {
       avisosTiempo.add(partida.id);
       avisar(`¡Ojo! Te quedan ${Math.ceil(r[c] / 1000)} segundos.`);
+      sonido("tiempo");
     }
   }
   const color = miColor();
@@ -1170,6 +1247,7 @@ function celebrar() {
   final.classList.add("oculto"); void final.offsetWidth; final.classList.remove("oculto");
   $("final-revancha").focus({ preventScroll: true });
   if (!yoPerdi) lanzarConfeti(tablas ? 70 : 180);
+  sonido(yoPerdi ? "derrota" : tablas ? "tablas" : "victoria");
 }
 
 $("final-tablero").addEventListener("click", cerrarFinal);
@@ -1519,7 +1597,7 @@ function agregarMensaje(m, nuevo) {
   caja.appendChild(el);
   caja.scrollTop = caja.scrollHeight;
   if (nuevo && !mio) {
-    tic(520);
+    sonido("mensaje");
     if (document.hidden) avisoPestana(`💬 ${nombres[m.autor] || "Tu rival"} te escribió`);
   }
 }
@@ -1552,21 +1630,11 @@ function avisarTurno(color, turno) {
   const cambio = jugadasVistas.id === partida.id && n > jugadasVistas.n;
   jugadasVistas = { id: partida.id, n };
   if (!cambio || !color || partida.estado !== "jugando" || turno !== color) return;
-  tic(660);
+  sonido("turno");
   if (document.hidden) avisoPestana("♟ Te toca mover");
 }
 function avisoPestana(texto) { document.title = texto; }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "Ajedrez entre Amigos"; });
-let audioTic = null;
-function tic(frecuencia) {
-  try {
-    audioTic = audioTic || new (window.AudioContext || window.webkitAudioContext)();
-    const t = audioTic.currentTime, o = audioTic.createOscillator(), g = audioTic.createGain();
-    o.type = "triangle"; o.frequency.value = frecuencia;
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-    o.connect(g).connect(audioTic.destination); o.start(t); o.stop(t + 0.16);
-  } catch {}
-}
 
 // ---------- Mesa del club junto al tablero (solo informativa) ----------
 let mesaPartidaDe = null;
@@ -1839,7 +1907,23 @@ function faltaPausa() {
 }
 const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
 
+let estadoSonido = { id: null, estado: null, tablas: null };
+function sonidosDeEstado(color) {
+  const cancelada = partida.estado === "terminada" && partida.motivo === "cancelada";
+  const ahora = cancelada ? "cancelada" : partida.estado;
+  const oferta = partida.estado === "jugando" && partida.tablas_ofrece && partida.tablas_version === partida.version && partida.tablas_ofrece !== yo ? partida.tablas_version : null;
+  if (estadoSonido.id === partida.id && color) {
+    if (ahora !== estadoSonido.estado) {
+      if (ahora === "pausada") sonido("pausa");
+      else if (ahora === "jugando" && estadoSonido.estado === "pausada") sonido("reanudar");
+      else if (ahora === "cancelada") sonido("cancelada");
+    }
+    if (oferta && oferta !== estadoSonido.tablas) sonido("tablas");
+  }
+  estadoSonido = { id: partida.id, estado: ahora, tablas: oferta };
+}
 function pintarControlEstado(color) {
+  sonidosDeEstado(color);
   const caja = $("control-estado");
   const cancelada = partida.estado === "terminada" && partida.motivo === "cancelada";
   const visible = !!color && (partida.estado === "jugando" || partida.estado === "pausada" || cancelada);

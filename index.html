@@ -599,6 +599,20 @@ button.cargando { position: relative; color: transparent !important; pointer-eve
 button.cargando::after { content: ""; position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(42,28,12,0.35); border-top-color: #2A1C0C; animation: girar 700ms linear infinite; }
 .secundario.cargando::after { border-color: rgba(243,234,218,0.3); border-top-color: var(--texto); }
 @keyframes girar { to { transform: rotate(360deg); } }
+
+/* ---------- Bocina flotante ---------- */
+.bocina-caja { position: fixed; left: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.bocina { width: 48px; height: 48px; padding: 0; border-radius: 50%; border: 1px solid rgba(227,199,126,0.4); background: rgba(42,28,19,0.92); color: var(--laton-claro); display: grid; place-items: center; box-shadow: 0 6px 18px rgba(10,6,3,0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: transform 180ms var(--resorte), background-color 160ms ease; }
+.bocina:hover { transform: scale(1.06); background: rgba(58,40,28,0.95); }
+.bocina svg { width: 22px; height: 22px; }
+.bocina.apagada { color: #F0A08A; border-color: rgba(201,96,63,0.5); }
+.bocina-panel { width: 240px; display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: #2A1C13; border: 1px solid var(--linea); box-shadow: 0 16px 36px rgba(10,6,3,0.55); animation: subir 280ms var(--resorte) both; }
+.bocina-titulo { font-size: 13px; font-weight: 600; color: var(--suave); }
+.bocina-fila { display: flex; align-items: center; gap: 10px; }
+.bocina-fila input { flex: 1; accent-color: var(--laton); }
+.bocina-fila output { min-width: 40px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bocina-botones { display: flex; gap: 8px; }
+.bocina-botones .btn-fila { flex: 1; justify-content: center; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -969,6 +983,23 @@ button.cargando::after { content: ""; position: absolute; inset: 0; margin: auto
     </div>
     <span class="llamada-cuenta" id="llamada-cuenta"></span>
   </div>
+</div>
+<div class="bocina-caja">
+  <div id="bocina-panel" class="bocina-panel oculto" role="group" aria-label="Volumen de las alertas">
+    <span class="bocina-titulo">Sonidos de alertas</span>
+    <div class="bocina-fila">
+      <label for="volumen" class="solo-lector">Volumen</label>
+      <input id="volumen" type="range" min="0" max="100" step="5" value="60">
+      <output id="volumen-valor" for="volumen">60%</output>
+    </div>
+    <div class="bocina-botones">
+      <button type="button" class="btn-fila fantasma" id="silenciar">Silenciar</button>
+      <button type="button" class="btn-fila dorado" id="probar-sonido">Probar</button>
+    </div>
+  </div>
+  <button type="button" id="bocina" class="bocina" aria-expanded="false" aria-controls="bocina-panel" aria-label="Sonidos encendidos. Abrir controles de volumen">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><g id="bocina-ondas"><path d="M16 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a8 8 0 0 1 0 11"/></g><g id="bocina-x" style="display:none"><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></g></svg>
+  </button>
 </div>
 <div id="aviso" role="status" class="oculto"></div>
 <script type="module" src="./app.js"></script>
