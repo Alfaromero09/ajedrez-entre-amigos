@@ -62,6 +62,7 @@ const vieneDeConfirmar = !vieneDeRecuperar && (/type=(signup|email|invite)/.test
 const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
 function mostrar(vista) {
+  $("ir-inicio")?.classList.toggle("oculto", vista !== "partida");
   if (vista === "acceso" && typeof prepararAcceso === "function") prepararAcceso();
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
   if (vista !== "partida" && document.body.classList.contains("enfoque")) ponerEnfoque(false);
@@ -2062,6 +2063,47 @@ function ubicarChat() {
 pantallaAncha.addEventListener?.("change", ubicarChat);
 ubicarChat();
 
+// ---------- Regresar al inicio desde una partida ----------
+function irAlInicio() {
+  if (document.body.classList.contains("enfoque")) ponerEnfoque(false);
+  history.pushState(null, "", location.pathname);
+  mostrar("inicio");
+}
+function pedirSalida() {
+  const enJuego = partida && miColor() && partida.estado === "jugando";
+  if (!enJuego) return irAlInicio();
+  const rival = nombres[partida.blancas === yo ? partida.negras : partida.blancas] || "tu rival";
+  $("salida-texto").textContent = `Tu partida contra ${rival} sigue en juego y los relojes siguen corriendo mientras no estés.`;
+  $("salida").classList.remove("oculto");
+}
+$("ir-inicio").addEventListener("click", pedirSalida);
+// El logo también regresa al inicio, con la misma pregunta si hay partida en juego
+document.querySelector("header > a").addEventListener("click", (e) => {
+  if (!yo || $("partida").classList.contains("oculto")) return;
+  e.preventDefault();
+  pedirSalida();
+});
+$("ir-inicio-2").addEventListener("click", pedirSalida);
+$("salida").addEventListener("click", async (e) => {
+  if (e.target.id === "salida") return $("salida").classList.add("oculto");
+  const b = e.target.closest("[data-salida]");
+  if (!b) return;
+  const opcion = b.dataset.salida;
+  if (opcion === "quedarme") return $("salida").classList.add("oculto");
+  if (opcion === "pausar") {
+    const { error } = await sb.rpc("pausar_partida", { p: partida.id, p_motivo: "Regreso más tarde", p_minutos: null });
+    if (error) return avisar("No se pudo pausar. Intenta de nuevo.");
+  }
+  if (opcion === "cancelar") {
+    const { error } = await sb.rpc("cancelar_juego", { p: partida.id, p_motivo: null });
+    if (error) return avisar("No se pudo cancelar la partida.");
+  }
+  $("salida").classList.add("oculto");
+  irAlInicio();
+  if (opcion === "pausar") avisar("Partida en pausa. La encuentras en «Mis partidas».");
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("salida").classList.contains("oculto")) $("salida").classList.add("oculto"); });
+
 // ---------- Tablero a pantalla completa ----------
 function ponerEnfoque(activar) {
   document.body.classList.toggle("enfoque", activar);
@@ -2103,6 +2145,7 @@ function abrirAjustes() {
   $("ajustes").classList.remove("oculto");
   $("aj-nombre").focus();
   sb.auth.getUser().then(({ data }) => { correoActual = data.user?.email || ""; });
+  sb.rpc("es_admin").then(({ data }) => $("torre-link").classList.toggle("oculto", data !== true), () => {});
 }
 function cerrarAjustes() { $("ajustes").classList.add("oculto"); }
 $("mi-cuenta").addEventListener("click", abrirAjustes);
