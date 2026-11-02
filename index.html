@@ -613,6 +613,8 @@ button.cargando::after { content: ""; position: absolute; inset: 0; margin: auto
 .bocina-fila output { min-width: 40px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
 .bocina-botones { display: flex; gap: 8px; }
 .bocina-botones .btn-fila { flex: 1; justify-content: center; }
+.bocina-panel .permiso { justify-content: center; }
+.bocina-nota { font-size: 11px; line-height: 1.45; color: #8F7C63; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -996,6 +998,8 @@ button.cargando::after { content: ""; position: absolute; inset: 0; margin: auto
       <button type="button" class="btn-fila fantasma" id="silenciar">Silenciar</button>
       <button type="button" class="btn-fila dorado" id="probar-sonido">Probar</button>
     </div>
+    <button type="button" class="btn-fila fantasma permiso" id="permiso-avisos">Activar avisos de llamadas</button>
+    <span class="bocina-nota">En celular: toca la página una vez al entrar para que puedan sonar las alertas.</span>
   </div>
   <button type="button" id="bocina" class="bocina" aria-expanded="false" aria-controls="bocina-panel" aria-label="Sonidos encendidos. Abrir controles de volumen">
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><g id="bocina-ondas"><path d="M16 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a8 8 0 0 1 0 11"/></g><g id="bocina-x" style="display:none"><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></g></svg>

@@ -858,7 +858,10 @@ function recibirLlamada(l) {
     if (quedan <= 0) { responder("no"); cerrarLlamada(); }
   }, 1000);
   sonar();
-  if (document.hidden) document.title = `📞 ${l.nombre} te invita a jugar`;
+  if (document.hidden) {
+    document.title = `📞 ${l.nombre} te invita a jugar`;
+    avisoSistema(`📞 ${l.nombre} te invita a jugar`, `Partida de ${textoTiempo(l.minutos)}. Toca para contestar.`);
+  }
 }
 
 function cerrarLlamada() {
@@ -910,8 +913,27 @@ function aplicarVolumen() {
   try { localStorage.setItem("ajedrez-sonido", JSON.stringify({ volumen: AUDIO.volumen, mudo: AUDIO.mudo })); } catch {}
   pintarBocina();
 }
-// Los navegadores solo dejan sonar después de un primer toque en la página
-["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => audio(), { once: true, capture: true }));
+// Los navegadores (sobre todo en celular) solo dejan sonar después de tocar la página.
+// En cada toque reactivamos el audio por si el teléfono lo suspendió al bloquear la pantalla.
+let audioDesbloqueado = false;
+function desbloquearAudio() {
+  const ctx = audio();
+  if (!ctx) return;
+  // iPhone: que los sonidos se escuchen aunque el switch de silencio esté puesto
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+  if (!audioDesbloqueado) {
+    audioDesbloqueado = true;
+    try {
+      // Un sonido mudo de un instante "abre" el audio en Safari de iPhone
+      const b = ctx.createBuffer(1, 1, 22050), src = ctx.createBufferSource();
+      src.buffer = b; src.connect(ctx.destination); src.start(0);
+      const silencio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
+      silencio.setAttribute("playsinline", ""); silencio.play().catch(() => {});
+    } catch {}
+  }
+}
+["pointerdown", "touchend", "keydown", "click"].forEach((ev) => document.addEventListener(ev, desbloquearAudio, { capture: true, passive: true }));
+document.addEventListener("visibilitychange", () => { if (!document.hidden && AUDIO.ctx?.state === "suspended") AUDIO.ctx.resume().catch(() => {}); });
 
 // Una nota suave: frecuencia, inicio, duración, volumen, forma de onda
 function nota(f, inicio = 0, dur = 0.16, vol = 0.5, tipo = "sine") {
@@ -945,14 +967,15 @@ function sonido(nombre) { try { SONIDOS[nombre]?.(); } catch {} }
 let timbre = null;
 function timbreRepetido(tipo) {
   callar();
+  const trino = (inicio) => [0, 0.06, 0.12, 0.18, 0.24, 0.30, 0.36, 0.42].forEach((d, i) => nota(i % 2 ? 1175 : 1480, inicio + d, 0.055, 0.42));
   const toque = tipo === "entrante"
-    ? () => { [0, 0.09, 0.18, 0.27, 0.36, 0.45].forEach((d, i) => nota(i % 2 ? 1046 : 1318, d, 0.08, 0.38)); [0, 0.09, 0.18, 0.27, 0.36, 0.45].forEach((d, i) => nota(i % 2 ? 1046 : 1318, 0.75 + d, 0.08, 0.38)); }
-    : () => { nota(440, 0, 0.9, 0.3); nota(480, 0, 0.9, 0.22); };
+    ? () => { trino(0); trino(0.6); try { navigator.vibrate?.([180, 80, 180]); } catch {} }
+    : () => { nota(440, 0, 0.55, 0.3); nota(480, 0, 0.55, 0.22); };
   toque();
-  timbre = setInterval(toque, tipo === "entrante" ? 2800 : 3000);
+  timbre = setInterval(toque, tipo === "entrante" ? 1700 : 2000);
 }
 function sonar() { timbreRepetido("entrante"); }
-function callar() { if (timbre) { clearInterval(timbre); timbre = null; } }
+function callar() { if (timbre) { clearInterval(timbre); timbre = null; } try { navigator.vibrate?.(0); } catch {} }
 function tic() { sonido("turno"); }
 
 // ---------- Bocina flotante: siempre visible ----------
@@ -985,6 +1008,29 @@ $("volumen").addEventListener("change", () => sonido("prueba"));
 $("silenciar").addEventListener("click", () => { AUDIO.mudo = !AUDIO.mudo; audio(); aplicarVolumen(); if (!AUDIO.mudo) sonido("prueba"); });
 $("probar-sonido").addEventListener("click", () => { audio(); sonido("prueba"); });
 pintarBocina();
+
+// Aviso del sistema (notificación) cuando la página está en segundo plano
+function avisoSistema(titulo, cuerpo) {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const n = new Notification(titulo, { body: cuerpo, tag: "ajedrez-llamada", renotify: true, requireInteraction: true });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch {}
+}
+function pintarPermisoAvisos() {
+  const b = $("permiso-avisos");
+  if (!b) return;
+  const soporta = "Notification" in window;
+  b.classList.toggle("oculto", !soporta || Notification.permission === "granted");
+  b.disabled = soporta && Notification.permission === "denied";
+  b.textContent = b.disabled ? "Avisos bloqueados en el navegador" : "Activar avisos de llamadas";
+}
+$("permiso-avisos").addEventListener("click", async () => {
+  try { await Notification.requestPermission(); } catch {}
+  pintarPermisoAvisos();
+  if (Notification.permission === "granted") avisar("Listo: te avisaremos de llamadas aunque estés en otra pestaña.");
+});
+pintarPermisoAvisos();
 
 // ---------- Partida ----------
 async function recargar(id) {
