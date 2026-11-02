@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/torre-de-control", "destination": "/torre-de-control/index.html" }
+  ]
+}

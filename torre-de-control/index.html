@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Torre de control · Ajedrez entre Amigos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<style>
+:root {
+  --fondo: #1C130C; --panel: #2A1C13; --panel-2: #33241A; --linea: rgba(233,220,195,0.10);
+  --texto: #F3EADA; --suave: #BFAB8F; --laton: #CDA54E; --laton-claro: #E3C77E; --tinta: #2A1C0C;
+  --rojo: #C9603F; --rojo-claro: #F0A08A; --verde: #7FA86E; --verde-claro: #A9CB9A; --ambar: #E2B33C;
+  --sombra-1: 0 1px 2px rgba(10,6,3,0.30), 0 10px 28px rgba(10,6,3,0.28), 0 28px 56px rgba(10,6,3,0.16);
+  --resorte: cubic-bezier(0.16, 1, 0.3, 1);
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; color: var(--texto); font-family: "Hanken Grotesk", system-ui, sans-serif; font-size: 15px;
+  background: radial-gradient(900px 500px at 90% -10%, rgba(205,165,78,0.12), transparent 60%), radial-gradient(800px 500px at -10% 30%, rgba(140,94,60,0.16), transparent 62%), var(--fondo); }
+h1, h2, h3 { font-family: "Fraunces", Georgia, serif; font-weight: 500; margin: 0; letter-spacing: -0.02em; }
+button { font: inherit; cursor: pointer; transition: transform 180ms var(--resorte), background-color 160ms ease, filter 160ms ease; }
+button:active { transform: scale(0.97); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--laton-claro); outline-offset: 2px; }
+button:disabled { opacity: 0.5; cursor: default; }
+input { font: inherit; color: var(--texto); background: #1F150E; border: 1px solid rgba(233,220,195,0.16); border-radius: 10px; height: 40px; padding: 0 12px; }
+.oculto { display: none !important; }
+.envoltura { max-width: 1320px; margin: 0 auto; padding: 20px 28px 64px; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--linea); }
+.marca { display: flex; align-items: center; gap: 12px; }
+.marca svg { width: 26px; height: 34px; }
+.marca h1 { font-size: 22px; }
+.marca small { display: block; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--laton-claro); font-family: "Hanken Grotesk", sans-serif; }
+.cabeza-der { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--suave); }
+a.enlace { color: var(--laton-claro); }
+a.btn { text-decoration: none; }
+.btn { height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.18); background: transparent; color: var(--texto); font-size: 14px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn:hover { background: #3A281C; }
+.btn.dorado { border: 0; background: var(--laton); color: var(--tinta); font-weight: 600; }
+.btn.dorado:hover { filter: brightness(1.08); }
+.btn.rojo { border-color: rgba(201,96,63,0.55); color: var(--rojo-claro); }
+.btn.rojo:hover { background: rgba(201,96,63,0.14); }
+.btn.lleno-rojo { border: 0; background: var(--rojo); color: #FFF4EC; font-weight: 600; }
+.btn.chico { height: 30px; padding: 0 10px; font-size: 12px; border-radius: 8px; }
+.tarjeta { background: var(--panel); border: 1px solid var(--linea); border-radius: 18px; padding: 18px; box-shadow: var(--sombra-1); display: flex; flex-direction: column; gap: 14px; }
+.cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.cifra { background: var(--panel); border: 1px solid var(--linea); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.cifra strong { font-family: "Fraunces", serif; font-weight: 500; font-size: 32px; font-variant-numeric: tabular-nums; }
+.cifra span { font-size: 13px; color: var(--suave); }
+.club-acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.accion { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--panel-2); }
+.accion p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--suave); }
+.fila-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.fila-form input { flex: 1 1 160px; min-width: 0; }
+.clave-actual { font-family: "Fraunces", serif; font-size: 18px; color: var(--laton-claro); }
+.barra-usuarios { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.buscador { position: relative; flex: 1 1 280px; max-width: 420px; }
+.buscador input { width: 100%; padding-left: 38px; }
+.buscador svg { position: absolute; left: 12px; top: 11px; width: 18px; height: 18px; color: var(--suave); }
+.tabla-scroll { overflow-x: auto; border-radius: 12px; border: 1px solid var(--linea); }
+table { width: 100%; border-collapse: collapse; min-width: 1080px; }
+th { position: sticky; top: 0; background: #241810; text-align: left; font-size: 12px; font-weight: 600; color: var(--suave); padding: 10px 12px; letter-spacing: 0.03em; }
+td { padding: 10px 12px; border-top: 1px solid var(--linea); vertical-align: middle; font-size: 14px; }
+tr:hover td { background: rgba(58,40,28,0.45); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; color: #CDBB9F; }
+.quien { display: flex; align-items: center; gap: 10px; min-width: 200px; }
+.cara { flex: none; width: 34px; height: 34px; border-radius: 50%; background: #4A3221; display: grid; place-items: center; overflow: hidden; }
+.cara img { width: 100%; height: 100%; object-fit: cover; }
+.cara svg { width: 70%; height: 70%; }
+.quien strong { display: block; font-weight: 600; }
+.quien small { color: var(--suave); font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.chip { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 999px; }
+.chip.admin { background: rgba(205,165,78,0.18); color: var(--laton-claro); border: 1px solid rgba(205,165,78,0.5); }
+.chip.tu { background: rgba(127,168,110,0.18); color: var(--verde-claro); border: 1px solid rgba(127,168,110,0.45); }
+.chip.pendiente { background: rgba(226,179,60,0.14); color: #F2D58C; border: 1px solid rgba(226,179,60,0.45); }
+.chip.sinperfil { background: rgba(201,96,63,0.14); color: var(--rojo-claro); border: 1px solid rgba(201,96,63,0.45); }
+.acciones-fila { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.fecha { font-size: 12px; color: var(--suave); white-space: nowrap; }
+.vacio { padding: 24px; text-align: center; color: var(--suave); }
+.acceso { max-width: 400px; margin: 10vh auto 0; }
+.acceso form { display: flex; flex-direction: column; gap: 10px; }
+.acceso label { font-size: 14px; color: var(--suave); }
+.aviso-grande { max-width: 520px; margin: 12vh auto 0; text-align: center; }
+.aviso-grande p { color: var(--suave); line-height: 1.6; }
+#aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 12px 18px; border-radius: 12px; background: #3A281C; border: 1px solid rgba(233,220,195,0.16); box-shadow: var(--sombra-1); z-index: 70; font-size: 14px; }
+.modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: rgba(15,9,5,0.72); backdrop-filter: blur(5px); }
+.modal-tarjeta { width: 100%; max-width: 440px; padding: 22px; border-radius: 20px; background: linear-gradient(180deg, #33241A, #241810); border: 1px solid rgba(233,220,195,0.14); box-shadow: 0 30px 70px rgba(10,6,3,0.55); display: flex; flex-direction: column; gap: 12px; animation: subir 360ms var(--resorte) both; }
+.modal-tarjeta p { margin: 0; color: var(--suave); line-height: 1.6; font-size: 14px; }
+.modal-tarjeta code { color: var(--laton-claro); font-family: inherit; font-weight: 600; }
+.modal-botones { display: flex; gap: 8px; justify-content: flex-end; }
+@keyframes subir { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (max-width: 640px) { .envoltura { padding: 16px; } }
+</style>
+</head>
+<body>
+<div class="envoltura">
+  <header>
+    <div class="marca">
+      <svg viewBox="0 0 40 50" aria-hidden="true"><path d="M10 46h20l-1-4H11z M12 40h16l-1-5H13z M14 33h12V15h-12z M11 15h18v-6h-4v3h-3V9h-4v3h-3V9h-4z" fill="#CDA54E"/></svg>
+      <div><small>Ajedrez entre Amigos</small><h1>Torre de control</h1></div>
+    </div>
+    <div class="cabeza-der oculto" id="cabeza-der">
+      <span id="admin-nombre"></span>
+      <a class="btn" href="/">Volver al club</a>
+      <button class="btn" id="salir">Salir</button>
+    </div>
+  </header>
+
+  <section id="acceso" class="tarjeta acceso oculto">
+    <h2>Entrar como administrador</h2>
+    <form id="form-acceso">
+      <label for="a-correo">Correo</label>
+      <input id="a-correo" type="email" autocomplete="username" required>
+      <label for="a-clave">Contraseña</label>
+      <input id="a-clave" type="password" autocomplete="current-password" required>
+      <button class="btn dorado" type="submit">Entrar</button>
+    </form>
+  </section>
+
+  <section id="sin-permiso" class="aviso-grande oculto">
+    <h2>Esta sección es solo para administradores</h2>
+    <p>Tu cuenta no tiene permiso para entrar a la Torre de control. Si crees que es un error, pídele a un administrador que te dé acceso.</p>
+    <a class="btn" href="/">Volver al club</a>
+  </section>
+
+  <main id="panel" class="oculto" style="display:flex; flex-direction:column; gap:20px">
+    <div class="cifras" id="cifras"></div>
+
+    <section class="tarjeta">
+      <h2>El club</h2>
+      <div class="club-acciones">
+        <div class="accion">
+          <h3>Clave del club</h3>
+          <p>Clave actual: <span class="clave-actual" id="clave-actual">—</span>. Al cambiarla, los nuevos registros necesitarán la nueva; las cuentas existentes no se afectan.</p>
+          <div class="fila-form"><input id="nueva-clave" type="text" placeholder="Nueva clave" autocomplete="off"><button class="btn dorado" id="cambiar-clave">Cambiar clave</button></div>
+        </div>
+        <div class="accion">
+          <h3>Reiniciar toda la mesa del club</h3>
+          <p>Todos empiezan de cero en la tabla de posiciones. No se borra ninguna partida: solo dejan de contar las anteriores a hoy.</p>
+          <div class="fila-form"><button class="btn rojo" id="reiniciar-todo">Reiniciar la mesa de todos</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <div class="barra-usuarios">
+        <h2>Usuarios</h2>
+        <div class="buscador">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <label for="buscar" class="oculto">Buscar</label>
+          <input id="buscar" type="search" placeholder="Buscar por nombre o correo">
+        </div>
+      </div>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>Jugador</th><th>Alta</th><th>Última vez</th><th style="text-align:right">PJ</th><th style="text-align:right">G</th><th style="text-align:right">P</th><th style="text-align:right">T</th><th style="text-align:right">Partidas</th><th style="text-align:right">Acciones</th></tr></thead>
+          <tbody id="usuarios"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="modal" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+  <div class="modal-tarjeta">
+    <h2 id="modal-titulo"></h2>
+    <p id="modal-texto"></p>
+    <label for="modal-input" id="modal-label" style="font-size:14px;color:var(--suave)"></label>
+    <input id="modal-input" type="text" autocomplete="off">
+    <div class="modal-botones"><button class="btn" id="modal-no">Cancelar</button><button class="btn lleno-rojo" id="modal-si" disabled>Confirmar</button></div>
+  </div>
+</div>
+<div id="aviso" role="status" class="oculto"></div>
+<script type="module" src="/torre-de-control/admin.js"></script>
+</body>
+</html>
