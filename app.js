@@ -30,7 +30,9 @@ function avisar(texto) {
 }
 
 // Llegó desde el enlace del correo de confirmación (se lee antes de que Supabase limpie la URL)
-const vieneDeConfirmar = /type=(signup|email|invite)/.test(location.hash) || new URLSearchParams(location.search).has("code");
+const vieneDeRecuperar = /type=recovery/.test(location.hash);
+const enlaceCaducado = /error_code=otp_expired|error=access_denied/.test(location.hash);
+const vieneDeConfirmar = !vieneDeRecuperar && (/type=(signup|email|invite)/.test(location.hash) || new URLSearchParams(location.search).has("code"));
 // Teléfonos y tabletas: pantalla táctil sin mouse
 const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
@@ -1595,6 +1597,69 @@ function aplicarAngulo() {
 }
 $("angulo").addEventListener("input", aplicarAngulo);
 
+// ---------- Recuperar contraseña ----------
+function verFormulario(cual) {
+  $("form-registro").classList.toggle("oculto", cual === "nueva");
+  $("form-entrar").classList.toggle("oculto", cual !== "entrar");
+  $("form-recuperar").classList.toggle("oculto", cual !== "recuperar");
+  $("form-nueva-clave").classList.toggle("oculto", cual !== "nueva");
+}
+$("olvide").addEventListener("click", () => {
+  $("rc-correo").value = $("e-correo").value;
+  verFormulario("recuperar");
+  $("rc-correo").focus();
+});
+$("volver-entrar").addEventListener("click", () => verFormulario("entrar"));
+$("form-recuperar").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const boton = e.target.querySelector("button[type=submit]");
+  boton.disabled = true;
+  const { error } = await sb.auth.resetPasswordForEmail($("rc-correo").value.trim(), { redirectTo: `${location.origin}/` });
+  boton.disabled = false;
+  if (error) {
+    return avisar(/rate|seconds/i.test(error.message)
+      ? "Espera un minuto antes de pedir otro enlace."
+      : "No se pudo enviar el correo. Revisa la dirección e intenta de nuevo.");
+  }
+  // Por seguridad no decimos si el correo existe o no
+  avisar("Si ese correo es del club, te llegará un enlace en unos minutos. Revisa también spam.");
+  verFormulario("entrar");
+});
+function mostrarNuevaClave() {
+  mostrar("acceso");
+  verFormulario("nueva");
+  history.replaceState(null, "", location.pathname);
+  $("nc-clave").focus();
+}
+function revisarNuevaClave() {
+  const a = $("nc-clave").value, b = $("nc-clave2").value, nota = $("nota-nueva");
+  nota.className = "nota"; nota.textContent = "";
+  if (!b) return true;
+  const ok = a === b;
+  nota.classList.add(ok ? "bien" : "mal");
+  nota.textContent = ok ? "Las contraseñas coinciden." : "Las contraseñas no coinciden.";
+  return ok;
+}
+$("nc-clave").addEventListener("input", revisarNuevaClave);
+$("nc-clave2").addEventListener("input", revisarNuevaClave);
+$("form-nueva-clave").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if ($("nc-clave").value !== $("nc-clave2").value) { revisarNuevaClave(); return avisar("Las dos contraseñas no coinciden."); }
+  const boton = e.target.querySelector("button[type=submit]");
+  boton.disabled = true;
+  const { data, error } = await sb.auth.updateUser({ password: $("nc-clave").value });
+  boton.disabled = false;
+  if (error) {
+    return avisar(/different|same/i.test(error.message)
+      ? "La contraseña nueva debe ser distinta a la anterior."
+      : "No se pudo guardar. Pide un enlace nuevo e intenta otra vez.");
+  }
+  e.target.reset();
+  verFormulario("entrar");
+  avisar("¡Listo! Tu contraseña quedó guardada.");
+  entrar(data.user);
+});
+
 // ---------- Arranque ----------
 async function arrancar() {
   if (SUPABASE_URL.includes("TU-PROYECTO") || SUPABASE_KEY.includes("TU-CLAVE")) {
@@ -1602,8 +1667,14 @@ async function arrancar() {
     return avisar("Falta llenar config.js con los datos de Supabase.");
   }
   sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  sb.auth.onAuthStateChange((evento) => { if (evento === "PASSWORD_RECOVERY") mostrarNuevaClave(); });
   const { data } = await sb.auth.getSession();
   const usuario = data.session?.user;
+  if (vieneDeRecuperar && usuario) return mostrarNuevaClave();
+  if (enlaceCaducado) {
+    history.replaceState(null, "", location.pathname);
+    setTimeout(() => avisar("Ese enlace ya caducó o ya se usó. Pide uno nuevo desde «¿Olvidaste tu contraseña?»."), 300);
+  }
   if (usuario && !usuario.is_anonymous) return entrar(usuario);
   if (usuario) await sb.auth.signOut();
   mostrar("acceso");
