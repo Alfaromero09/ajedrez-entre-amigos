@@ -651,6 +651,35 @@ body.enfoque .inicio-flotante { display: grid; }
 .salida-opciones .secundario { height: 44px; }
 .salida-opciones .enlace-olvide { align-self: center; }
 @media (max-width: 640px) { .btn-inicio b { display: none; } .btn-inicio { padding: 0 11px; } }
+
+/* ---------- Conectados en la columna izquierda de la partida ---------- */
+.izq-linea { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--linea); display: flex; flex-direction: column; gap: 6px; }
+.izq-cuenta { font-family: "Hanken Grotesk", sans-serif; font-size: 12px; color: #9CC28F; margin-left: 4px; }
+.izq-lista { display: flex; flex-direction: column; gap: 2px; }
+.izq-fila { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px; border-radius: 8px; }
+.izq-fila:hover { background: rgba(58,40,28,0.5); }
+.izq-fila .ficha { width: 24px; height: 24px; }
+.izq-fila .ficha.punto-verde::after { width: 8px; height: 8px; }
+.izq-fila div { min-width: 0; display: flex; flex-direction: column; }
+.izq-fila strong { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.izq-fila small { font-size: 11px; color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.izq-jugar { height: 26px; padding: 0 9px; border: 0; border-radius: 999px; background: #7FA86E; color: #13200E; font-size: 11px; font-weight: 700; }
+.izq-jugar:hover { filter: brightness(1.08); transform: none; }
+.izq-ocupado { font-size: 10px; font-weight: 700; color: #F0A08A; }
+.izq-vacio { margin: 0; font-size: 12px; color: var(--suave); line-height: 1.5; padding: 0 4px; }
+
+/* ---------- Chat del club (mini) ---------- */
+.izq-chat { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--linea); display: flex; flex-direction: column; gap: 6px; }
+.club-mensajes { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; padding-right: 2px; }
+.club-msj { font-size: 12px; line-height: 1.4; padding: 4px 6px; border-radius: 8px; overflow-wrap: anywhere; animation: aparecer 200ms ease-out both; }
+.club-msj b { font-weight: 600; color: var(--laton-claro); margin-right: 4px; }
+.club-msj.mio b { color: #A9CB9A; }
+.club-msj time { display: block; font-size: 10px; color: #8F7C63; }
+.club-vacio { margin: 0; font-size: 12px; color: var(--suave); padding: 0 4px; }
+.club-forma { display: flex !important; flex-direction: row !important; gap: 4px !important; }
+.club-forma input { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); font: inherit; font-size: 12px; }
+.club-forma button { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: var(--laton); color: var(--tinta); display: grid; place-items: center; }
+.club-forma button svg { width: 15px; height: 15px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -832,6 +861,19 @@ body.enfoque .inicio-flotante { display: grid; }
         <h2>La mesa del club</h2>
         <ol id="mesa-partida" class="mini-mesa"></ol>
         <div id="cara-a-cara" class="cara oculto"></div>
+        <div class="izq-linea">
+          <h2>En línea <span id="izq-cuenta" class="izq-cuenta"></span></h2>
+          <div id="izq-conectados" class="izq-lista"></div>
+        </div>
+        <div class="izq-chat">
+          <h2>Chat del club</h2>
+          <div id="club-mensajes" class="club-mensajes" aria-live="polite"></div>
+          <form id="form-club" class="club-forma">
+            <label for="club-texto" class="solo-lector">Mensaje para todo el club</label>
+            <input id="club-texto" type="text" maxlength="200" autocomplete="off" placeholder="Avisa algo al club…">
+            <button type="submit" aria-label="Enviar al club"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-2-7z"/></svg></button>
+          </form>
+        </div>
       </aside>
       <div class="zona-tablero">
         <div class="jugador" id="arriba"></div>

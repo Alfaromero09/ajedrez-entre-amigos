@@ -286,6 +286,7 @@ async function entrar(usuario) {
   setInterval(marcarConexion, 4 * 60000);
   cargarMiembros();
   escucharClub();
+  cargarChatClub();
   const id = idDeLaUrl();
   if (id) abrirPartida(id);
   else mostrar("inicio");
@@ -627,6 +628,7 @@ function escucharClub() {
   if (canalClub) return;
   canalClub = sb.channel("club", { config: { presence: { key: yo } } })
     .on("postgres_changes", { event: "*", schema: "public", table: "partidas" }, refrescarClub)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensajes_club" }, ({ new: m }) => agregarClub(m, true))
     .on("broadcast", { event: "llamada" }, ({ payload }) => recibirLlamada(payload))
     .on("broadcast", { event: "respuesta" }, ({ payload }) => recibirRespuesta(payload))
     .on("broadcast", { event: "colgar" }, ({ payload }) => { if (llamadaEntrante && llamadaEntrante.id === payload.id) cerrarLlamada(); })
@@ -640,6 +642,7 @@ function escucharClub() {
       }
       if (!$("inicio").classList.contains("oculto")) { pintarEnLinea(); pintarRivales(ultimaMesa); }
       if (partida && partida.estado === "esperando" && miColor() === "w") pintarLlamables();
+      if (!$("partida").classList.contains("oculto")) pintarLineaPartida();
     })
     .subscribe((estado) => {
       if (estado === "SUBSCRIBED") presenciaEstado("club");
@@ -1051,6 +1054,7 @@ async function abrirPartida(id) {
   await cargarNombres([partida.blancas, partida.negras, partida.reservada_para]);
   cargarChat(id);
   pintarMesaPartida();
+  pintarLineaPartida();
   dibujar();
 
   cerrarVideo();
@@ -2103,6 +2107,77 @@ $("salida").addEventListener("click", async (e) => {
   if (opcion === "pausar") avisar("Partida en pausa. La encuentras en «Mis partidas».");
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("salida").classList.contains("oculto")) $("salida").classList.add("oculto"); });
+
+// ---------- Quién está en línea, junto al tablero ----------
+function pintarLineaPartida() {
+  const otros = Object.keys(enLinea).filter((id) => id !== yo)
+    .sort((a, b) => (enLinea[a].jugando - enLinea[b].jugando) || (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || ""));
+  $("izq-cuenta").textContent = `${otros.length + 1} conectados`;
+  if (!otros.length) { $("izq-conectados").innerHTML = '<p class="izq-vacio">Nadie más está conectado ahorita.</p>'; return; }
+  const rivalActual = partida ? (partida.blancas === yo ? partida.negras : partida.blancas) : null;
+  $("izq-conectados").innerHTML = otros.map((id) => {
+    const u = enLinea[id];
+    const lado = id === rivalActual ? '<span class="izq-ocupado" style="color:#A9CB9A">CONTIGO</span>'
+      : u.jugando ? '<span class="izq-ocupado">OCUPADO</span>'
+      : `<button type="button" class="izq-jugar" data-retar-izq="${id}" aria-label="Retar a ${esc(u.nombre)}">Jugar</button>`;
+    return `<div class="izq-fila">${ficha(id, "punto-verde")}<div><strong>${esc(u.nombre)}</strong><small>${id === rivalActual ? "En esta partida" : u.jugando ? "Jugando" : estadoDe(id)}</small></div>${lado}</div>`;
+  }).join("");
+}
+$("izq-conectados").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-retar-izq]");
+  if (!b) return;
+  const id = b.dataset.retarIzq;
+  // Si estoy en una partida en juego, primero la pauso para que mi reloj no corra
+  if (partida && miColor() && partida.estado === "jugando") {
+    if (!confirm(`Tu partida actual sigue en juego. ¿La pausamos y retas a ${enLinea[id]?.nombre || "este jugador"}?`)) return;
+    const { error } = await sb.rpc("pausar_partida", { p: partida.id, p_motivo: "Jugando otra partida", p_minutos: null });
+    if (error) return avisar("No se pudo pausar tu partida actual.");
+  }
+  b.disabled = true;
+  const ok = await crearMesa(minutosElegidos, id);
+  if (!ok) b.disabled = false;
+});
+
+// ---------- Chat del club: avisos rápidos entre amigos (últimas 24 horas) ----------
+const vistosClub = new Set();
+async function cargarChatClub() {
+  const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { data, error } = await sb.from("mensajes_club").select("*").gte("creado", desde).order("id", { ascending: true }).limit(60);
+  if (error) return;
+  await cargarNombres([...new Set((data || []).map((m) => m.autor))]);
+  $("club-mensajes").innerHTML = "";
+  vistosClub.clear();
+  (data || []).forEach((m) => agregarClub(m, false));
+  if (!(data || []).length) $("club-mensajes").innerHTML = '<p class="club-vacio" id="club-vacio">Sin mensajes hoy.</p>';
+}
+async function agregarClub(m, nuevo) {
+  if (!m || vistosClub.has(m.id)) return;
+  vistosClub.add(m.id);
+  if (!nombres[m.autor]) await cargarNombres([m.autor]);
+  $("club-vacio")?.remove();
+  const mio = m.autor === yo;
+  const caja = $("club-mensajes");
+  const el = document.createElement("div");
+  el.className = `club-msj${mio ? " mio" : ""}`;
+  const hora = new Date(m.creado).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+  el.innerHTML = `<b>${esc(mio ? "Tú" : nombres[m.autor] || "Alguien")}</b>${esc(m.texto)}<time>${hora}</time>`;
+  caja.appendChild(el);
+  caja.scrollTop = caja.scrollHeight;
+  if (nuevo && !mio) {
+    sonido("mensaje");
+    if (document.hidden) avisoPestana(`💬 ${nombres[m.autor] || "Alguien"} escribió en el club`);
+  }
+}
+$("form-club").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("club-texto");
+  const texto = input.value.trim();
+  if (!texto) return;
+  input.value = "";
+  const { data, error } = await sb.from("mensajes_club").insert({ texto }).select().single();
+  if (error) { input.value = texto; return avisar("No se pudo enviar el mensaje al club."); }
+  agregarClub(data, false);
+});
 
 // ---------- Tablero a pantalla completa ----------
 function ponerEnfoque(activar) {
