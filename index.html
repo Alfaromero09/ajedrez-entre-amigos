@@ -583,6 +583,22 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .estado-chip.jugando { background: rgba(127,168,110,0.18); color: #A9CB9A; border: 1px solid rgba(127,168,110,0.45); }
 .estado-chip.pausada { background: rgba(226,179,60,0.16); color: #F2D58C; border: 1px solid rgba(226,179,60,0.5); }
 .estado-chip.cancelada { background: rgba(201,96,63,0.16); color: #F0A08A; border: 1px solid rgba(201,96,63,0.5); }
+
+/* ---------- Acceso más cómodo ---------- */
+.acceso-grid.conocido #form-entrar { order: -1; box-shadow: 0 0 0 1px rgba(227,199,126,0.35), var(--sombra-2); }
+.recordarme { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 10px; font-size: 14px; color: var(--suave); cursor: pointer; }
+.recordarme input { width: 18px; height: 18px; accent-color: var(--laton); }
+.entrar-enlaces { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; }
+.tip-biometria { margin: 0; font-size: 12px; line-height: 1.5; color: #8F7C63; text-align: center; }
+.listo { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: rgba(127,168,110,0.12); border: 1px solid rgba(127,168,110,0.45); font-size: 14px; line-height: 1.5; }
+.listo.alerta { background: rgba(226,179,60,0.12); border-color: rgba(226,179,60,0.5); }
+.listo strong { color: var(--texto); }
+.listo .btn-fila { align-self: flex-start; }
+.nota.mayus { color: #F2D58C; }
+button.cargando { position: relative; color: transparent !important; pointer-events: none; }
+button.cargando::after { content: ""; position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(42,28,12,0.35); border-top-color: #2A1C0C; animation: girar 700ms linear infinite; }
+.secundario.cargando::after { border-color: rgba(243,234,218,0.3); border-top-color: var(--texto); }
+@keyframes girar { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -609,8 +625,8 @@ form { display: flex; flex-direction: column; gap: 16px; }
         <form id="form-registro" class="tarjeta">
           <h1>Crea tu cuenta</h1>
           <p>Necesitas el código de invitación del club.</p>
-          <div class="campo"><label for="r-nombre">Nombre de jugador</label><input id="r-nombre" type="text" minlength="2" maxlength="20" autocomplete="off" required></div>
-          <div class="campo"><label for="r-correo">Correo</label><input id="r-correo" type="email" autocomplete="email" required></div>
+          <div class="campo"><label for="r-nombre">Nombre de jugador</label><input id="r-nombre" type="text" minlength="2" maxlength="20" autocomplete="off" autocapitalize="words" required><span class="nota" id="nota-nombre" aria-live="polite"></span></div>
+          <div class="campo"><label for="r-correo">Correo</label><input id="r-correo" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" required></div>
           <fieldset class="genero">
             <legend>Género</legend>
             <label><input type="radio" name="avatar" value="rey" checked><span class="avatar grande" id="icono-rey"></span>Hombre</label>
@@ -618,15 +634,23 @@ form { display: flex; flex-direction: column; gap: 16px; }
           </fieldset>
           <div class="campo"><label for="r-clave">Contraseña</label><div class="clave"><input id="r-clave" type="password" minlength="6" autocomplete="new-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
           <div class="campo"><label for="r-clave2">Confirma tu contraseña</label><div class="clave"><input id="r-clave2" type="password" minlength="6" autocomplete="new-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div><span class="nota" id="nota-clave" aria-live="polite"></span></div>
-          <div class="campo"><label for="r-codigo">Código de invitación</label><input id="r-codigo" type="text" autocomplete="off" required></div>
+          <div class="campo"><label for="r-codigo">Código de invitación</label><input id="r-codigo" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" required><span class="nota">Pídeselo a quien te invitó. No importan mayúsculas o minúsculas.</span></div>
           <button class="primario" type="submit">Crear cuenta</button>
+          <div id="registro-listo" class="listo oculto" role="status"></div>
         </form>
         <form id="form-entrar" class="tarjeta">
-          <h1>Ya soy del club</h1>
-          <div class="campo"><label for="e-correo">Correo</label><input id="e-correo" type="email" autocomplete="email" required></div>
-          <div class="campo"><label for="e-clave">Contraseña</label><div class="clave"><input id="e-clave" type="password" autocomplete="current-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
+          <h1 id="entrar-titulo">Ya soy del club</h1>
+          <p id="entrar-hola" class="ayuda oculto"></p>
+          <div class="campo"><label for="e-correo">Correo</label><input id="e-correo" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" required></div>
+          <div class="campo"><label for="e-clave">Contraseña</label><div class="clave"><input id="e-clave" name="password" type="password" autocomplete="current-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
+          <label class="recordarme"><input type="checkbox" id="recordarme" checked><span>Recordarme en este dispositivo</span></label>
           <button class="primario" type="submit">Entrar</button>
-          <button type="button" class="enlace-olvide" id="olvide">¿Olvidaste tu contraseña?</button>
+          <div id="entrar-ayuda" class="listo oculto" role="status"></div>
+          <div class="entrar-enlaces">
+            <button type="button" class="enlace-olvide" id="olvide">¿Olvidaste tu contraseña?</button>
+            <button type="button" class="enlace-olvide oculto" id="otra-cuenta">Usar otra cuenta</button>
+          </div>
+          <p class="tip-biometria">Consejo: deja que tu navegador guarde la contraseña. En iPhone y Mac la rellena con Face ID o Touch ID; en Android, con tu huella; en Windows, con Windows Hello.</p>
         </form>
         <form id="form-recuperar" class="tarjeta oculto">
           <h1>Recupera tu contraseña</h1>

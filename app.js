@@ -30,6 +30,30 @@ function avisar(texto) {
   avisar.t = setTimeout(() => el.classList.add("oculto"), 4500);
 }
 
+// ---------- Recordar sesión y usuario en este dispositivo ----------
+const LS = (() => { try { const k = "__p"; localStorage.setItem(k, "1"); localStorage.removeItem(k); return localStorage; } catch { return null; } })();
+const SS = (() => { try { return sessionStorage; } catch { return null; } })();
+const recordarSesion = () => (LS ? LS.getItem("ajedrez-recordar") !== "no" : false);
+// La sesión vive en localStorage si eligió "Recordarme"; si no, solo mientras la pestaña esté abierta
+const almacenSesion = {
+  getItem: (k) => (recordarSesion() ? LS : SS)?.getItem(k) ?? null,
+  setItem: (k, v) => (recordarSesion() ? LS : SS)?.setItem(k, v),
+  removeItem: (k) => { LS?.removeItem(k); SS?.removeItem(k); },
+};
+const recordado = () => { try { return JSON.parse(LS?.getItem("ajedrez-usuario") || "null"); } catch { return null; } };
+function guardarRecordado(correo, nombre) {
+  if (!LS) return;
+  if (recordarSesion()) LS.setItem("ajedrez-usuario", JSON.stringify({ correo, nombre }));
+  else LS.removeItem("ajedrez-usuario");
+}
+// Botón con ruedita mientras espera, para evitar doble clic
+async function conCarga(boton, tarea) {
+  if (!boton || boton.classList.contains("cargando")) return;
+  boton.classList.add("cargando");
+  boton.disabled = true;
+  try { return await tarea(); } finally { boton.classList.remove("cargando"); boton.disabled = false; }
+}
+
 // Llegó desde el enlace del correo de confirmación (se lee antes de que Supabase limpie la URL)
 const vieneDeRecuperar = /type=recovery/.test(location.hash);
 const enlaceCaducado = /error_code=otp_expired|error=access_denied/.test(location.hash);
@@ -38,6 +62,7 @@ const vieneDeConfirmar = !vieneDeRecuperar && (/type=(signup|email|invite)/.test
 const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
 function mostrar(vista) {
+  if (vista === "acceso" && typeof prepararAcceso === "function") prepararAcceso();
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
   if (vista !== "partida" && document.body.classList.contains("enfoque")) ponerEnfoque(false);
   if (vista === "inicio") {
@@ -107,21 +132,105 @@ function revisarClaves() {
 $("r-clave").addEventListener("input", revisarClaves);
 $("r-clave2").addEventListener("input", revisarClaves);
 
-$("form-entrar").addEventListener("submit", async (e) => {
+$("form-entrar").addEventListener("submit", (e) => {
   e.preventDefault();
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: $("e-correo").value.trim(),
-    password: $("e-clave").value,
+  const boton = e.target.querySelector("button[type=submit]");
+  conCarga(boton, async () => {
+    const correo = $("e-correo").value.trim();
+    LS?.setItem("ajedrez-recordar", $("recordarme").checked ? "si" : "no");
+    $("entrar-ayuda").classList.add("oculto");
+    const { data, error } = await sb.auth.signInWithPassword({ email: correo, password: $("e-clave").value });
+    if (error) {
+      if (/not confirmed/i.test(error.message)) {
+        mostrarAyuda($("entrar-ayuda"), `Tu correo <strong>${esc(correo)}</strong> todavía no está confirmado. Abre el enlace que te mandamos (revisa spam).`, correo, true);
+        return;
+      }
+      if (/rate|too many/i.test(error.message)) return avisar("Demasiados intentos. Espera un minuto y vuelve a probar.");
+      $("e-clave").select();
+      return avisar("Correo o contraseña incorrectos.");
+    }
+    // Le pide al navegador guardar la contraseña (en celular se rellena con Face ID o huella)
+    try {
+      if (window.PasswordCredential && $("recordarme").checked) {
+        await navigator.credentials.store(new PasswordCredential({ id: correo, password: $("e-clave").value, name: data.user.user_metadata?.nombre || correo }));
+      }
+    } catch {}
+    entrar(data.user);
   });
-  if (error) {
-    if (/not confirmed/i.test(error.message)) return avisar("Primero confirma tu correo con el enlace que te mandamos.");
-    return avisar("Correo o contraseña incorrectos.");
-  }
-  entrar(data.user);
 });
 
-$("form-registro").addEventListener("submit", async (e) => {
+// Aviso con botón para reenviar el correo de confirmación
+function mostrarAyuda(caja, html, correo, alerta) {
+  caja.className = `listo${alerta ? " alerta" : ""}`;
+  caja.innerHTML = `<span>${html}</span><button type="button" class="btn-fila fantasma" data-reenviar="${esc(correo)}">Reenviar correo de confirmación</button>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-reenviar]");
+  if (!b) return;
+  conCarga(b, async () => {
+    const { error } = await sb.auth.resend({ type: "signup", email: b.dataset.reenviar, options: { emailRedirectTo: location.origin + "/" } });
+    avisar(error ? (/rate|seconds/i.test(error.message) ? "Espera un minuto antes de pedir otro correo." : "No se pudo reenviar. Intenta más tarde.") : "Listo, te reenviamos el correo. Revisa también spam.");
+  });
+});
+
+// Si ya entró antes en este dispositivo: correo listo y saludo
+function prepararAcceso() {
+  const r = recordado();
+  $("recordarme").checked = recordarSesion();
+  $("acceso").querySelector(".acceso-grid").classList.toggle("conocido", !!r);
+  $("otra-cuenta").classList.toggle("oculto", !r);
+  $("entrar-hola").classList.toggle("oculto", !r);
+  if (r) {
+    $("e-correo").value = r.correo || "";
+    $("entrar-titulo").textContent = `¡Hola de nuevo${r.nombre ? `, ${r.nombre}` : ""}!`;
+    $("entrar-hola").textContent = "Escribe tu contraseña o deja que tu navegador la rellene.";
+    setTimeout(() => $("e-clave").focus(), 50);
+  } else {
+    $("entrar-titulo").textContent = "Ya soy del club";
+  }
+}
+$("otra-cuenta").addEventListener("click", () => {
+  LS?.removeItem("ajedrez-usuario");
+  $("e-correo").value = "";
+  $("e-clave").value = "";
+  prepararAcceso();
+  $("e-correo").focus();
+});
+
+// Aviso de Bloq Mayús activado en cualquier contraseña
+document.addEventListener("keyup", (e) => {
+  const input = e.target;
+  if (!(input instanceof HTMLInputElement) || input.type !== "password" && !input.closest(".clave")) return;
+  const caja = input.closest(".campo");
+  if (!caja || typeof e.getModifierState !== "function") return;
+  let nota = caja.querySelector(".nota.mayus");
+  const activo = e.getModifierState("CapsLock");
+  if (activo && !nota) { nota = document.createElement("span"); nota.className = "nota mayus"; nota.textContent = "Bloq Mayús está activado."; caja.appendChild(nota); }
+  if (!activo && nota) nota.remove();
+});
+
+// Revisa si el nombre está libre mientras escribe
+let tNombre = null;
+$("r-nombre").addEventListener("input", () => {
+  clearTimeout(tNombre);
+  const nota = $("nota-nombre");
+  const n = $("r-nombre").value.trim();
+  nota.className = "nota"; nota.textContent = "";
+  if (n.length < 2) return;
+  tNombre = setTimeout(async () => {
+    if (!sb) return;
+    const { data } = await sb.rpc("nombre_disponible", { n });
+    if ($("r-nombre").value.trim() !== n) return;
+    nota.classList.add(data === false ? "mal" : "bien");
+    nota.textContent = data === false ? "Ese nombre ya lo usa alguien del club." : "¡Disponible!";
+  }, 400);
+});
+
+$("form-registro").addEventListener("submit", (e) => {
   e.preventDefault();
+  conCarga(e.target.querySelector("button[type=submit]"), () => registrar(e));
+});
+async function registrar(e) {
   const nombre = $("r-nombre").value.trim();
   if (nombre.length < 2) return avisar("El nombre debe tener al menos 2 letras.");
   if ($("r-clave").value !== $("r-clave2").value) { revisarClaves(); $("r-clave2").focus(); return avisar("Las dos contraseñas no coinciden."); }
@@ -146,12 +255,18 @@ $("form-registro").addEventListener("submit", async (e) => {
     return avisar("No se pudo crear la cuenta. Intenta de nuevo.");
   }
   if (!data.session) {
+    const correo = $("r-correo").value.trim();
     e.target.reset();
     revisarClaves();
-    return avisar("Listo. Te mandamos un correo: abre el enlace para confirmar tu cuenta y luego entra.");
+    $("nota-nombre").textContent = "";
+    $("e-correo").value = correo;
+    LS?.setItem("ajedrez-usuario", JSON.stringify({ correo, nombre }));
+    mostrarAyuda($("registro-listo"), `¡Listo, ${esc(nombre)}! Te mandamos un correo a <strong>${esc(correo)}</strong>. Ábrelo para confirmar tu cuenta y luego entra con tu contraseña.`, correo, false);
+    $("registro-listo").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
   }
   entrar(data.user);
-});
+}
 
 $("salir").addEventListener("click", async () => {
   await sb.auth.signOut();
@@ -163,6 +278,7 @@ async function entrar(usuario) {
   await Promise.all([cargarNombres([yo]), calibrarReloj()]);
   nombres[yo] = nombres[yo] || usuario.user_metadata?.nombre || "Jugador";
   $("mi-nombre").textContent = nombres[yo];
+  guardarRecordado(usuario.email, nombres[yo]);
   $("mi-icono").innerHTML = cara(yo, usuario.user_metadata?.avatar);
   $("cabecera-usuario").classList.remove("oculto");
   marcarConexion();
@@ -183,7 +299,30 @@ $("tiempos").addEventListener("click", (e) => {
   if (!btn) return;
   minutosElegidos = Number(btn.dataset.min);
   $("tiempos").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+  LS?.setItem("ajedrez-minutos", String(minutosElegidos));
 });
+// Recuerda el último tiempo que eligió
+(() => {
+  const m = Number(LS?.getItem("ajedrez-minutos"));
+  const btn = m && $("tiempos").querySelector(`button[data-min="${m}"]`);
+  if (!btn) return;
+  minutosElegidos = m;
+  $("tiempos").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+})();
+
+// Al regresar a la pestaña (o al volver el internet) se pone al día solo
+async function ponerseAlDia() {
+  if (!yo || !sb) return;
+  if (partida && !$("partida").classList.contains("oculto")) {
+    const fresca = await recargar(partida.id);
+    if (fresca && fresca.version >= partida.version) { partida = fresca; dibujar(); }
+  } else if (!$("inicio").classList.contains("oculto")) {
+    cargarClub();
+  }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) ponerseAlDia(); });
+window.addEventListener("offline", () => avisar("Sin conexión a internet. Tu partida se sincroniza al volver."));
+window.addEventListener("online", () => { avisar("Conexión recuperada."); ponerseAlDia(); });
 
 // Crea una mesa (opcionalmente apartada para un rival) y, si ese rival está conectado, le llama
 async function crearMesa(minutos, rival) {
@@ -1992,7 +2131,9 @@ async function arrancar() {
     mostrar("acceso");
     return avisar("Falta llenar config.js con los datos de Supabase.");
   }
-  sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { storage: almacenSesion, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  });
   sb.auth.onAuthStateChange((evento) => { if (evento === "PASSWORD_RECOVERY") mostrarNuevaClave(); });
   const { data } = await sb.auth.getSession();
   const usuario = data.session?.user;
