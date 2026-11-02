@@ -19,6 +19,7 @@ let reclamando = false;
 let minutosElegidos = 10;
 const nombres = {};
 const avatares = {};
+const fotos = {};       // id -> foto de perfil (si la subió)
 
 // ---------- Utilidades ----------
 function avisar(texto) {
@@ -48,6 +49,10 @@ function mostrar(vista) {
   presenciaEstado(vista === "partida" ? "partida" : "club");
 }
 
+// Foto de perfil si existe; si no, el ícono de Rey o Dama
+const cara = (id, respaldo) => fotos[id]
+  ? `<img src="${String(fotos[id]).replace(/"/g, "%22")}" alt="" loading="lazy">`
+  : iconoSVG(respaldo || avatares[id] || "rey");
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const ahoraServidor = () => Date.now() + desfase;
 const idDeLaUrl = () => new URLSearchParams(location.search).get("p");
@@ -63,8 +68,8 @@ async function calibrarReloj() {
 async function cargarNombres(ids) {
   const faltan = ids.filter((id) => id && !nombres[id]);
   if (!faltan.length) return false;
-  const { data } = await sb.from("perfiles").select("id, nombre, avatar").in("id", faltan);
-  (data || []).forEach((p) => (nombres[p.id] = p.nombre, avatares[p.id] = p.avatar));
+  const { data } = await sb.from("perfiles").select("id, nombre, avatar, foto_url").in("id", faltan);
+  (data || []).forEach((p) => { nombres[p.id] = p.nombre; avatares[p.id] = p.avatar; if (p.foto_url) fotos[p.id] = p.foto_url; else delete fotos[p.id]; });
   return true;
 }
 const nombreDe = (id) => (id === yo ? "Tú" : nombres[id] || "Jugador");
@@ -158,7 +163,7 @@ async function entrar(usuario) {
   await Promise.all([cargarNombres([yo]), calibrarReloj()]);
   nombres[yo] = nombres[yo] || usuario.user_metadata?.nombre || "Jugador";
   $("mi-nombre").textContent = nombres[yo];
-  $("mi-icono").innerHTML = iconoSVG(avatares[yo] || usuario.user_metadata?.avatar);
+  $("mi-icono").innerHTML = cara(yo, usuario.user_metadata?.avatar);
   $("cabecera-usuario").classList.remove("oculto");
   marcarConexion();
   setInterval(marcarConexion, 4 * 60000);
@@ -200,7 +205,7 @@ let ultimasVivo = [];
 let pendienteClub = null;
 
 const textoTiempo = (min) => (min >= 60 ? `${min / 60} ${min === 60 ? "hora" : "horas"}` : `${min} min`);
-const ficha = (id, extra = "") => `<span class="ficha ${extra}">${iconoSVG(avatares[id] || "rey")}</span>`;
+const ficha = (id, extra = "") => `<span class="ficha ${extra}">${cara(id)}</span>`;
 
 function hace(fecha) {
   const min = Math.max(0, Math.round((ahoraServidor() - new Date(fecha).getTime()) / 60000));
@@ -218,18 +223,22 @@ function irAPartida(id) {
 async function cargarClub() {
   if (!yo) return;
   const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const [salasR, vivoR, mesaR, claveR, mioR, recientesR] = await Promise.all([
+  const hace7 = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  const [salasR, vivoR, mesaR, claveR, mioR, recientesR, canceladasR] = await Promise.all([
     sb.from("partidas").select("id, blancas, minutos, creada, reservada_para").eq("estado", "esperando").gte("creada", desde).order("creada", { ascending: false }).limit(30),
-    sb.from("partidas").select("id, blancas, negras, minutos, jugadas, actualizada, fen, reloj_blancas, reloj_negras, ultimo_tick").eq("estado", "jugando").order("actualizada", { ascending: false }).limit(20),
+    sb.from("partidas").select("id, blancas, negras, minutos, jugadas, actualizada, fen, reloj_blancas, reloj_negras, ultimo_tick, estado, pausa_por, pausa_motivo, pausa_desde, pausa_hasta, motivo").in("estado", ["jugando", "pausada"]).order("actualizada", { ascending: false }).limit(20),
     sb.rpc("mesa_del_club"),
     sb.rpc("clave_del_club"),
     sb.from("partidas").select("id, blancas, negras, resultado, motivo, minutos, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).or(`blancas.eq.${yo},negras.eq.${yo}`).order("actualizada", { ascending: false }).limit(50),
     sb.from("partidas").select("id, blancas, negras, resultado, motivo, actualizada").eq("estado", "terminada").not("negras", "is", null).not("resultado", "is", null).order("actualizada", { ascending: false }).limit(6),
+    sb.from("partidas").select("id, blancas, negras, minutos, actualizada, motivo, pausa_por, pausa_motivo, estado").eq("estado", "terminada").eq("motivo", "cancelada")
+      .gte("actualizada", hace7).or(`blancas.eq.${yo},negras.eq.${yo}`).order("actualizada", { ascending: false }).limit(5),
   ]);
   // Las mesas apartadas solo las ven quien la creó y para quien se apartó
   const salas = (salasR.data || []).filter((x) => !x.reservada_para || x.reservada_para === yo || x.blancas === yo);
   // Fuera las que ya se quedaron sin tiempo aunque nadie lo haya reclamado
   const vivo = (vivoR.data || []).filter((x) => {
+    if (x.estado === "pausada") return true;
     if (!x.ultimo_tick) return false;
     const resta = (x.fen.split(" ")[1] === "w" ? x.reloj_blancas : x.reloj_negras) - (ahoraServidor() - new Date(x.ultimo_tick).getTime());
     return resta > 0;
@@ -239,7 +248,7 @@ async function cargarClub() {
   pintarRivales(mesa);
   cargarMiembros();
   const recientes = recientesR.data || [];
-  await cargarNombres([...salasR.data || [], ...vivo, ...recientes].flatMap((x) => [x.blancas, x.negras]));
+  await cargarNombres([...salasR.data || [], ...vivo, ...recientes, ...(canceladasR.data || [])].flatMap((x) => [x.blancas, x.negras]));
   // Solo partidas de jugadores con cuenta del club (las pruebas anónimas de la fase 1 no tienen nombre)
   const conCuenta = (id) => !!nombres[id];
   ultimasSalas = salas.filter((x) => conCuenta(x.blancas));
@@ -252,6 +261,7 @@ async function cargarClub() {
   pintarResumen();
   pintarEnLinea();
   pintarResultados(recientes.slice(0, 3));
+  pintarMisPartidas(vivo.filter((x) => x.blancas === yo || x.negras === yo), canceladasR.data || []);
   pintarClave(claveR.data);
   pintarUltimo((mioR.data || [])[0]);
 }
@@ -330,7 +340,9 @@ function pintarVivo(vivo) {
   $("en-vivo").innerHTML = vivo.map((x) => {
     const mia = x.blancas === yo || x.negras === yo;
     const n = Math.ceil((x.jugadas?.length || 0) / 2);
-    const meta = `${textoTiempo(x.minutos)}, ${n ? `jugada ${n}` : "recién empieza"}`;
+    const meta = x.estado === "pausada"
+      ? `<span class="estado-chip pausada">PAUSA</span> ${esc(x.pausa_motivo || "")}`
+      : `${textoTiempo(x.minutos)}, ${n ? `jugada ${n}` : "recién empieza"}`;
     const nb = x.blancas === yo ? "Tú" : nombres[x.blancas] || "Jugador";
     const nn = x.negras === yo ? "Tú" : nombres[x.negras] || "Jugador";
     return `<div class="fila"><span class="parejas">${ficha(x.blancas, "clara")}${ficha(x.negras, "oscura")}</span>` +
@@ -398,7 +410,8 @@ function pintarNumeros(m, mias) {
 }
 
 function estadoDe(id) {
-  if (ultimasVivo.some((x) => x.blancas === id || x.negras === id)) return "Jugando";
+  if (ultimasVivo.some((x) => x.estado !== "pausada" && (x.blancas === id || x.negras === id))) return "Jugando";
+  if (ultimasVivo.some((x) => x.estado === "pausada" && (x.blancas === id || x.negras === id))) return "Con una partida en pausa";
   if (ultimasSalas.some((x) => x.blancas === id)) return "Esperando rival";
   return "En el club";
 }
@@ -510,9 +523,9 @@ setInterval(() => { if (yo && !$("inicio").classList.contains("oculto")) { pinta
 // ---------- Miembros del club y última conexión ----------
 let miembros = [];
 async function cargarMiembros() {
-  const { data } = await sb.from("perfiles").select("id, nombre, avatar, ultima_vez").order("nombre");
+  const { data } = await sb.from("perfiles").select("id, nombre, avatar, ultima_vez, foto_url").order("nombre");
   miembros = data || [];
-  miembros.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; });
+  miembros.forEach((m) => { nombres[m.id] = m.nombre; avatares[m.id] = m.avatar; if (m.foto_url) fotos[m.id] = m.foto_url; else delete fotos[m.id]; });
   if (!$("inicio").classList.contains("oculto")) pintarEnLinea();
   if (partida && partida.estado === "esperando" && miColor() === "w") pintarLlamables();
 }
@@ -540,6 +553,31 @@ function pintarRivales(mesa) {
   sel.innerHTML = '<option value="">Cualquiera del club</option>' +
     otros.map((m) => `<option value="${m.id}">${esc(m.nombre)}${enLinea[m.id] ? " · conectado" : ""}</option>`).join("");
   if (otros.some((m) => m.id === antes)) sel.value = antes;
+}
+
+// ---------- Mis partidas: en juego, en pausa y canceladas ----------
+function pintarMisPartidas(activas, canceladas) {
+  const jug = activas.filter((x) => x.estado === "jugando");
+  const pau = activas.filter((x) => x.estado === "pausada");
+  const partes = [];
+  if (jug.length) partes.push(`${jug.length} playing`);
+  if (pau.length) partes.push(`${pau.length} en pausa`);
+  if (canceladas.length) partes.push(`${canceladas.length} ${canceladas.length === 1 ? "cancelada" : "canceladas"}`);
+  $("cuenta-mias").textContent = partes.join(" · ");
+  const vs = (x) => esc(nombres[x.blancas === yo ? x.negras : x.blancas] || "Jugador");
+  const rival = (x) => (x.blancas === yo ? x.negras : x.blancas);
+  const filas = [
+    ...jug.map((x) => `<div class="fila">${ficha(rival(x), "chica")}<div><strong>vs ${vs(x)}</strong><small>${textoTiempo(x.minutos)} · ${Math.ceil((x.jugadas?.length || 0) / 2) ? `jugada ${Math.ceil((x.jugadas?.length || 0) / 2)}` : "recién empieza"}</small></div><span class="estado-chip jugando">PLAYING</span><button class="btn-fila dorado" data-abrir="${x.id}">Abrir</button></div>`),
+    ...pau.map((x) => {
+      const quien = x.pausa_por === yo ? "Tú" : (nombres[x.pausa_por] || "Rival");
+      return `<div class="fila">${ficha(rival(x), "chica")}<div><strong>vs ${vs(x)}</strong><small>${esc(quien)}: ${esc(x.pausa_motivo || "En pausa")}</small></div><span class="estado-chip pausada">PAUSA</span><button class="btn-fila fantasma" data-abrir="${x.id}">Abrir</button></div>`;
+    }),
+    ...canceladas.map((x) => {
+      const quien = x.pausa_por === yo ? "Cancelaste" : `Canceló ${nombres[x.pausa_por] || "tu rival"}`;
+      return `<div class="fila apagada">${ficha(rival(x), "chica")}<div><strong>vs ${vs(x)}</strong><small>${esc(quien)}${x.pausa_motivo && x.pausa_motivo !== "Cancelada" ? `: ${esc(x.pausa_motivo)}` : ""} · ${hacePoco(x.actualizada)}</small></div><span class="estado-chip cancelada">CANCELADA</span></div>`;
+    }),
+  ];
+  $("mis-partidas").innerHTML = filas.join("") || '<p class="vacio-club">No tienes partidas en curso, en pausa ni canceladas recientes.</p>';
 }
 
 // ---------- Invitar al club ----------
@@ -616,7 +654,7 @@ $("llamables").addEventListener("click", (e) => {
 function llamar(para) {
   if (!partida || partida.estado !== "esperando" || miColor() !== "w" || llamando[para]) return;
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  enviar("llamada", { id, de: yo, para, nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", partida: partida.id, minutos: partida.minutos || 10 });
+  enviar("llamada", { id, de: yo, para, nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", foto: fotos[yo] || null, partida: partida.id, minutos: partida.minutos || 10 });
   llamando[para] = {
     id,
     timer: setTimeout(() => {
@@ -663,7 +701,8 @@ function recibirLlamada(l) {
   llamadaEntrante = l;
   if (l.avatar) avatares[l.de] = l.avatar;
   nombres[l.de] = nombres[l.de] || l.nombre;
-  $("llamada-ficha").innerHTML = iconoSVG(l.avatar || "rey");
+  if (l.foto && /^https:\/\/[^"']+\/storage\/v1\/object\/public\/fotos\//.test(l.foto)) fotos[l.de] = l.foto;
+  $("llamada-ficha").innerHTML = cara(l.de, l.avatar);
   $("llamada-titulo").textContent = `${l.nombre} te invita a jugar`;
   $("llamada-texto").textContent = `Partida de ${textoTiempo(l.minutos)}. Tú llevas las negras.`;
   $("llamada").classList.remove("oculto");
@@ -815,6 +854,10 @@ function miColor() {
 
 function textoFinal() {
   const { resultado, motivo } = partida;
+  if (motivo === "cancelada") {
+    const quien = partida.pausa_por === yo ? "Cancelaste" : `${nombres[partida.pausa_por] || "Tu rival"} canceló`;
+    return `${quien} la partida${partida.pausa_motivo && partida.pausa_motivo !== "Cancelada" ? `: «${partida.pausa_motivo}»` : ""}. No cuenta en la mesa.`;
+  }
   if (resultado === "½-½") return "La partida terminó en tablas.";
   const ganador = resultado === "1-0" ? partida.blancas : partida.negras;
   const quien = ganador === yo ? "Ganaste" : `Ganó ${nombres[ganador] || "tu rival"}`;
@@ -845,6 +888,7 @@ function formato(ms) {
 
 function actualizarRelojes() {
   if (!partida) return;
+  if (partida.estado === "pausada") pintarCuentaPausa();
   const r = restantes();
   const turno = partida.fen.split(" ")[1];
   for (const c of ["w", "b"]) {
@@ -1049,6 +1093,7 @@ function dibujar() {
   $("form-chat").classList.toggle("oculto", !color);
   textoChatVacio();
   avisarTurno(color, turno);
+  pintarControlEstado(color);
   $("nueva").classList.toggle("oculto", partida.estado !== "terminada" && !!color);
   if (partida.estado === "esperando") {
     estado.textContent = color === "w"
@@ -1058,6 +1103,8 @@ function dibujar() {
       : `${nombres[partida.blancas] || "Alguien"} te espera en esta mesa.`;
   } else if (partida.estado === "terminada") {
     estado.textContent = textoFinal();
+  } else if (partida.estado === "pausada") {
+    estado.textContent = "Partida en pausa. Los relojes están detenidos.";
   } else {
     const jaque = juego.inCheck() ? "Jaque. " : "";
     if (!color) estado.textContent = `${jaque}Mueven las ${turno === "w" ? "blancas" : "negras"}.`;
@@ -1068,7 +1115,7 @@ function dibujar() {
   const tira = (c) => {
     const id = c === "w" ? partida.blancas : partida.negras;
     const nombre = id ? nombreDe(id) : "Lugar libre";
-    const icono = id ? `<span class="avatar">${iconoSVG(avatares[id])}</span>` : "";
+    const icono = id ? `<span class="avatar">${cara(id)}</span>` : "";
     const capt = capturas[c].map((t) => piezaSVG(t, c === "w" ? "b" : "w")).join("");
     const ventaja = material[c] > material[c === "w" ? "b" : "w"] ? `<span class="ventaja">+${material[c] - material[c === "w" ? "b" : "w"]}</span>` : "";
     return `<div>${icono}<div class="lado"><strong>${esc(nombre)}</strong><small>${c === "w" ? "Blancas" : "Negras"}</small>` +
@@ -1451,7 +1498,7 @@ function revisarVideo() {
   if (videoDe !== partida.id) {
     videoDe = partida.id;
     $("rival-nombre").textContent = nombres[rival] || "Rival";
-    $("rival-ficha").innerHTML = iconoSVG(avatares[rival] || "rey");
+    $("rival-ficha").innerHTML = cara(rival);
     $("rival-estado").textContent = "Cámara apagada";
     pintarMedios({ cam: false, mic: false });
     enviarRtc({ tipo: "hola" });
@@ -1641,6 +1688,93 @@ $("mover-yo").addEventListener("click", (e) => {
   caja.addEventListener("pointercancel", soltar);
 })();
 
+// ---------- Pausar, reanudar y cancelar ----------
+function puedoReanudar() {
+  if (partida.estado !== "pausada" || !miColor()) return false;
+  if (partida.pausa_por === yo) return true;
+  return !!partida.pausa_hasta && ahoraServidor() >= new Date(partida.pausa_hasta).getTime();
+}
+function faltaPausa() {
+  if (!partida.pausa_hasta) return null;
+  return Math.max(0, new Date(partida.pausa_hasta).getTime() - ahoraServidor());
+}
+const mmss = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`; };
+
+function pintarControlEstado(color) {
+  const caja = $("control-estado");
+  const cancelada = partida.estado === "terminada" && partida.motivo === "cancelada";
+  const visible = !!color && (partida.estado === "jugando" || partida.estado === "pausada" || cancelada);
+  caja.classList.toggle("oculto", !visible);
+  const pill = $("pill-estado");
+  const tipo = cancelada ? "cancelada" : partida.estado === "pausada" ? "pausada" : "jugando";
+  pill.className = `pill-estado ${tipo}`;
+  $("pill-texto").textContent = { jugando: "PLAYING", pausada: "PAUSA", cancelada: "CANCELADA" }[tipo];
+  pill.disabled = cancelada;
+  if (cancelada || partida.estado === "terminada") cerrarMenuEstado();
+  $("menu-pausar").classList.toggle("oculto", partida.estado !== "jugando");
+  $("menu-reanudar").classList.toggle("oculto", partida.estado !== "pausada");
+  $("reanudar").disabled = !puedoReanudar();
+  $("reanudar-nota").textContent = partida.estado !== "pausada" ? "" : puedoReanudar() ? "" :
+    `${nombres[partida.pausa_por] || "Tu rival"} la pausó. Podrás reanudarla ${partida.pausa_hasta ? "cuando se cumpla el tiempo" : "cuando regrese"}.`;
+  // Aviso sobre el tablero
+  const aviso = $("aviso-pausa");
+  const enPausa = partida.estado === "pausada";
+  aviso.classList.toggle("oculto", !enPausa);
+  document.querySelector(".escena").classList.toggle("pausada", enPausa);
+  if (enPausa) {
+    const quien = partida.pausa_por === yo ? "Pausaste" : `${esc(nombres[partida.pausa_por] || "Tu rival")} pausó`;
+    aviso.innerHTML = `<span>⏸ <strong>${quien}</strong>: ${esc(partida.pausa_motivo || "En pausa")} <span class="cuenta" id="cuenta-pausa"></span></span>` +
+      (puedoReanudar() ? '<button type="button" class="btn-fila verde" data-reanudar="1">Reanudar</button>' : "");
+    pintarCuentaPausa();
+  }
+}
+function pintarCuentaPausa() {
+  const el = $("cuenta-pausa");
+  if (!el) return;
+  const falta = faltaPausa();
+  const desde = partida.pausa_desde ? Math.max(0, ahoraServidor() - new Date(partida.pausa_desde).getTime()) : 0;
+  el.textContent = falta === null ? `· hace ${mmss(desde)}` : falta > 0 ? `· regresa en ${mmss(falta)}` : "· ya se cumplió el tiempo";
+  // Cuando se cumple el tiempo, al rival se le habilita reanudar
+  if (falta === 0 && $("reanudar").disabled && puedoReanudar()) dibujar();
+}
+function cerrarMenuEstado() {
+  $("menu-estado").classList.add("oculto");
+  $("pill-estado").setAttribute("aria-expanded", "false");
+}
+$("pill-estado").addEventListener("click", () => {
+  const abrir = $("menu-estado").classList.contains("oculto");
+  $("menu-estado").classList.toggle("oculto", !abrir);
+  $("pill-estado").setAttribute("aria-expanded", String(abrir));
+});
+async function pausar(motivo, minutos) {
+  const { error } = await sb.rpc("pausar_partida", { p: partida.id, p_motivo: motivo, p_minutos: minutos || null });
+  if (error) return avisar("No se pudo pausar. Intenta de nuevo.");
+  cerrarMenuEstado();
+  avisar("Partida en pausa. Los relojes se detuvieron.");
+}
+$("menu-pausar").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-motivo]");
+  if (b) pausar(b.dataset.motivo, Number(b.dataset.pausa) || null);
+});
+$("pausa-otro-btn").addEventListener("click", () => {
+  pausar($("pausa-otro").value.trim() || "En pausa", null);
+  $("pausa-otro").value = "";
+});
+async function reanudar() {
+  const { error } = await sb.rpc("reanudar_partida", { p: partida.id });
+  if (error) return avisar(/tiempo/.test(error.message) ? "Todavía no se cumple el tiempo de la pausa." : "No se pudo reanudar.");
+  cerrarMenuEstado();
+}
+$("reanudar").addEventListener("click", reanudar);
+$("aviso-pausa").addEventListener("click", (e) => { if (e.target.closest("[data-reanudar]")) reanudar(); });
+$("cancelar-juego").addEventListener("click", async () => {
+  if (!confirm("¿Cancelar la partida? No contará en la mesa del club.")) return;
+  const { error } = await sb.rpc("cancelar_juego", { p: partida.id, p_motivo: $("cancelar-motivo").value.trim() || null });
+  if (error) return avisar("No se pudo cancelar la partida.");
+  $("cancelar-motivo").value = "";
+  cerrarMenuEstado();
+});
+
 // ---------- Tablero a pantalla completa ----------
 function ponerEnfoque(activar) {
   document.body.classList.toggle("enfoque", activar);
@@ -1665,6 +1799,129 @@ function aplicarAngulo() {
   document.querySelectorAll(".pieza").forEach((p) => (p.style.transform = `rotateX(${-a}deg)`));
 }
 $("angulo").addEventListener("input", aplicarAngulo);
+
+// ---------- Ajustes de cuenta ----------
+let fotoNueva = undefined;   // Blob nuevo, null para quitarla, undefined si no cambia
+let correoActual = "";
+function abrirAjustes() {
+  $("aj-nombre").value = nombres[yo] || "";
+  document.querySelectorAll('input[name="aj-avatar"]').forEach((r) => (r.checked = r.value === (avatares[yo] || "rey")));
+  fotoNueva = undefined;
+  $("foto-vista").innerHTML = cara(yo);
+  $("baja-confirmar").classList.add("oculto");
+  $("baja-texto").value = "";
+  $("baja-2").disabled = true;
+  $("form-cambiar-clave").reset();
+  $("ajustes").classList.remove("oculto");
+  $("aj-nombre").focus();
+  sb.auth.getUser().then(({ data }) => { correoActual = data.user?.email || ""; });
+}
+function cerrarAjustes() { $("ajustes").classList.add("oculto"); }
+$("mi-cuenta").addEventListener("click", abrirAjustes);
+$("ajustes-cerrar").addEventListener("click", cerrarAjustes);
+$("ajustes").addEventListener("click", (e) => { if (e.target.id === "ajustes") cerrarAjustes(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("ajustes").classList.contains("oculto")) cerrarAjustes(); });
+
+// Recorta al centro en cuadro de 320 px y la guarda como JPG ligero
+async function prepararFoto(archivo) {
+  const img = await createImageBitmap(archivo);
+  const lado = Math.min(img.width, img.height);
+  const lienzo = document.createElement("canvas");
+  lienzo.width = lienzo.height = 320;
+  lienzo.getContext("2d").drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, 320, 320);
+  return new Promise((ok) => lienzo.toBlob(ok, "image/jpeg", 0.85));
+}
+$("foto-archivo").addEventListener("change", async (e) => {
+  const archivo = e.target.files[0];
+  e.target.value = "";
+  if (!archivo) return;
+  if (!archivo.type.startsWith("image/")) return avisar("Elige una imagen (JPG, PNG o similar).");
+  try {
+    fotoNueva = await prepararFoto(archivo);
+    $("foto-vista").innerHTML = `<img src="${URL.createObjectURL(fotoNueva)}" alt="">`;
+  } catch {
+    avisar("No se pudo leer esa imagen. Prueba con otra.");
+  }
+});
+$("foto-quitar").addEventListener("click", () => {
+  fotoNueva = null;
+  const av = document.querySelector('input[name="aj-avatar"]:checked')?.value || "rey";
+  $("foto-vista").innerHTML = iconoSVG(av);
+});
+document.querySelectorAll('input[name="aj-avatar"]').forEach((r) => r.addEventListener("change", () => {
+  if (fotoNueva === null || (!fotos[yo] && !fotoNueva)) $("foto-vista").innerHTML = iconoSVG(r.value);
+}));
+
+function refrescarMiCara() {
+  $("mi-nombre").textContent = nombres[yo];
+  $("mi-icono").innerHTML = cara(yo);
+  if (!$("inicio").classList.contains("oculto")) cargarClub();
+  else if (partida) dibujar();
+  if (canalClub) presenciaEstado(presenciaDonde);
+}
+
+$("form-perfil").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const boton = e.target.querySelector("button[type=submit]");
+  boton.disabled = true;
+  try {
+    const nombre = $("aj-nombre").value.trim();
+    const avatar = document.querySelector('input[name="aj-avatar"]:checked')?.value || "rey";
+    const { error } = await sb.rpc("actualizar_perfil", { p_nombre: nombre, p_avatar: avatar });
+    if (error) return avisar(/uso/.test(error.message) ? "Ese nombre ya lo tiene alguien del club." : /caracteres/.test(error.message) ? "El nombre debe tener entre 2 y 20 caracteres." : "No se pudo guardar. Intenta de nuevo.");
+    nombres[yo] = nombre;
+    avatares[yo] = avatar;
+    if (fotoNueva) {
+      const ruta = `${yo}/foto.jpg`;
+      const subida = await sb.storage.from("fotos").upload(ruta, fotoNueva, { upsert: true, contentType: "image/jpeg", cacheControl: "3600" });
+      if (subida.error) return avisar("Se guardó tu nombre, pero la foto no se pudo subir. Intenta con otra imagen.");
+      const url = `${sb.storage.from("fotos").getPublicUrl(ruta).data.publicUrl}?v=${Date.now()}`;
+      const r = await sb.rpc("poner_foto", { p_url: url });
+      if (r.error) return avisar("La foto no se pudo guardar.");
+      fotos[yo] = url;
+    } else if (fotoNueva === null && fotos[yo]) {
+      await sb.storage.from("fotos").remove([`${yo}/foto.jpg`]);
+      await sb.rpc("poner_foto", { p_url: null });
+      delete fotos[yo];
+    }
+    fotoNueva = undefined;
+    refrescarMiCara();
+    avisar("Cambios guardados.");
+    cerrarAjustes();
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+$("form-cambiar-clave").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if ($("aj-nueva").value !== $("aj-nueva2").value) return avisar("Las dos contraseñas nuevas no coinciden.");
+  const boton = e.target.querySelector("button[type=submit]");
+  boton.disabled = true;
+  try {
+    // Primero confirmamos que la contraseña actual es correcta
+    const prueba = await sb.auth.signInWithPassword({ email: correoActual, password: $("aj-actual").value });
+    if (prueba.error) return avisar("La contraseña actual no es correcta.");
+    const { error } = await sb.auth.updateUser({ password: $("aj-nueva").value });
+    if (error) return avisar(/different|same/i.test(error.message) ? "La nueva debe ser distinta a la actual." : "No se pudo cambiar. Intenta de nuevo.");
+    e.target.reset();
+    avisar("Contraseña cambiada.");
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+$("baja-1").addEventListener("click", () => { $("baja-confirmar").classList.remove("oculto"); $("baja-texto").focus(); });
+$("baja-texto").addEventListener("input", (e) => { $("baja-2").disabled = e.target.value.trim().toUpperCase() !== "BAJA"; });
+$("baja-2").addEventListener("click", async () => {
+  $("baja-2").disabled = true;
+  if (fotos[yo]) await sb.storage.from("fotos").remove([`${yo}/foto.jpg`]).catch(() => {});
+  const { error } = await sb.rpc("eliminar_cuenta");
+  if (error) { $("baja-2").disabled = false; return avisar("No se pudo eliminar la cuenta. Intenta de nuevo."); }
+  await sb.auth.signOut().catch(() => {});
+  alert("Tu cuenta fue eliminada. ¡Gracias por jugar en el club!");
+  location.href = "./";
+});
 
 // ---------- Recuperar contraseña ----------
 function verFormulario(cual) {

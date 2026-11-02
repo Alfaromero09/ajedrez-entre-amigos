@@ -512,6 +512,77 @@ form { display: flex; flex-direction: column; gap: 16px; }
 .ctrl:hover { background: #3A281C; transform: none; }
 .ctrl[aria-pressed="true"] { background: #7FA86E; border-color: #7FA86E; color: #13200E; font-weight: 600; }
 .video-nota { margin: 0; font-size: 12px; line-height: 1.5; color: var(--suave); }
+
+/* ---------- Ajustes de cuenta ---------- */
+.mi-cuenta { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px 0 6px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--suave); font-size: 15px; }
+.mi-cuenta:hover { border-color: var(--linea); background: #2A1C13; color: var(--texto); transform: none; }
+.mi-cuenta .engrane { width: 16px; height: 16px; opacity: 0.7; }
+.avatar img, .ficha img, .foto-grande img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.ficha:has(img) svg, .avatar:has(img) svg { display: none; }
+.ajustes { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 24px; background: rgba(15,9,5,0.7); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); animation: aparecer 200ms ease-out both; overflow-y: auto; }
+.ajustes-tarjeta { width: 100%; max-width: 460px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 22px; border-radius: 22px; background: linear-gradient(180deg, #33241A, #241810); border: 1px solid rgba(233,220,195,0.14); box-shadow: 0 30px 70px rgba(10,6,3,0.55); display: flex; flex-direction: column; gap: 18px; animation: subir 420ms var(--resorte) both; }
+.ajustes-cabeza { display: flex; align-items: center; justify-content: space-between; }
+.ajustes-cabeza h2 { font-size: 26px; }
+.cerrar-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--linea); background: transparent; color: var(--texto); font-size: 22px; line-height: 1; }
+.ajustes-seccion { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--linea); }
+.ajustes-seccion:first-of-type { border-top: 0; padding-top: 0; }
+.ajustes-seccion h3 { margin: 0; font-family: "Fraunces", serif; font-weight: 500; font-size: 18px; }
+.foto-fila { display: flex; align-items: center; gap: 16px; }
+.foto-grande { flex: none; width: 84px; height: 84px; border-radius: 50%; background: #4A3221; display: grid; place-items: center; overflow: hidden; box-shadow: 0 0 0 3px var(--laton); }
+.foto-grande svg { width: 64%; height: 64%; }
+.foto-botones { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.foto-botones .enlace-olvide { align-self: flex-start; }
+.foto-botones small { font-size: 12px; color: var(--suave); }
+.chico-btn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; font-size: 14px; cursor: pointer; }
+.genero-chico { border: 0; margin: 0; padding: 0; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.genero-chico legend { width: 100%; margin-bottom: 6px; font-size: 14px; color: var(--suave); }
+.campo.genero-chico { flex-direction: row; }
+.genero-chico label { display: inline-flex !important; flex-direction: row !important; width: auto !important; align-items: center; gap: 6px; padding: 0 !important; border: 0 !important; background: none !important; font-size: 15px; color: var(--texto); }
+.genero-chico input { width: auto; height: auto; accent-color: var(--laton); }
+.baja p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--suave); }
+.baja-confirmar { display: flex; flex-direction: column; gap: 8px; }
+.baja-confirmar label { font-size: 14px; color: var(--suave); }
+.baja-confirmar input { height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(201,96,63,0.5); background: #1F150E; color: var(--texto); font: inherit; }
+.peligro-lleno { height: 44px; border: 0; border-radius: 10px; background: #C9603F; color: #FFF4EC; font-weight: 600; font-size: 15px; }
+.peligro-lleno:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+/* ---------- Estado de la partida: PLAYING / PAUSA / CANCELADA ---------- */
+.control-estado { display: flex; flex-direction: column; gap: 10px; }
+.pill-estado { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 52px; border-radius: 14px; border: 0; font-size: 18px; font-weight: 700; letter-spacing: 0.08em; transition: filter 160ms ease, transform 180ms var(--resorte); }
+.pill-estado:hover { filter: brightness(1.08); }
+.pill-estado .pill-flecha { width: 18px; height: 18px; margin-left: 4px; transition: transform 200ms ease; }
+.pill-estado[aria-expanded="true"] .pill-flecha { transform: rotate(180deg); }
+.pill-estado.jugando { background: #7FA86E; color: #13200E; box-shadow: 0 8px 22px rgba(127,168,110,0.3); }
+.pill-estado.pausada { background: #E2B33C; color: #2A1C0C; box-shadow: 0 8px 22px rgba(226,179,60,0.32); }
+.pill-estado.cancelada { background: #C9603F; color: #FFF4EC; box-shadow: 0 8px 22px rgba(201,96,63,0.3); cursor: default; }
+.pill-estado.cancelada .pill-flecha { display: none; }
+.pill-icono { width: 14px; height: 14px; flex: none; }
+.pill-estado.jugando .pill-icono { width: 0; height: 0; border-left: 13px solid currentColor; border-top: 8px solid transparent; border-bottom: 8px solid transparent; }
+.pill-estado.pausada .pill-icono { border-left: 4px solid currentColor; border-right: 4px solid currentColor; width: 14px; }
+.pill-estado.cancelada .pill-icono { background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
+.menu-estado { display: flex; flex-direction: column; gap: 14px; padding: 14px; border-radius: 12px; background: #1F150E; border: 1px solid var(--linea); animation: subir 300ms var(--resorte) both; }
+.menu-grupo { display: flex; flex-direction: column; gap: 8px; }
+.menu-titulo { font-size: 13px; font-weight: 600; color: var(--suave); }
+.menu-opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.menu-opciones button { height: 40px; padding: 0 8px; border-radius: 10px; border: 1px solid rgba(226,179,60,0.45); background: rgba(226,179,60,0.10); color: #F2D58C; font-size: 13px; font-weight: 600; }
+.menu-opciones button:hover { background: rgba(226,179,60,0.2); transform: none; }
+.menu-otro { display: flex; gap: 6px; }
+.menu-otro input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.16); background: #2A1C13; color: var(--texto); font: inherit; font-size: 13px; }
+.menu-nota { font-size: 12px; color: var(--suave); }
+.btn-fila.rojo { border: 0; background: #C9603F; color: #FFF4EC; }
+.btn-grande { height: 46px; border-radius: 12px; border: 0; font-size: 16px; font-weight: 700; }
+.btn-grande.verde { background: #7FA86E; color: #13200E; }
+.btn-grande:disabled { opacity: 0.5; cursor: default; transform: none; }
+.aviso-pausa { position: absolute; left: 14px; right: 14px; top: 14px; z-index: 5; justify-content: center; flex-wrap: wrap; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 14px; background: rgba(42,28,12,0.92); border: 2px solid #E2B33C; box-shadow: 0 10px 28px rgba(10,6,3,0.5); color: var(--texto); font-size: 14px; animation: subir 360ms var(--resorte) both; }
+.aviso-pausa strong { color: #F2D58C; }
+.aviso-pausa .cuenta { font-variant-numeric: tabular-nums; color: #F2D58C; font-weight: 600; }
+.aviso-pausa .btn-fila { flex: none; }
+.escena.pausada .marco { filter: saturate(0.55) brightness(0.8); transition: filter 300ms ease; }
+#mis-partidas .fila small { white-space: normal; }
+.estado-chip { flex: none; display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
+.estado-chip.jugando { background: rgba(127,168,110,0.18); color: #A9CB9A; border: 1px solid rgba(127,168,110,0.45); }
+.estado-chip.pausada { background: rgba(226,179,60,0.16); color: #F2D58C; border: 1px solid rgba(226,179,60,0.5); }
+.estado-chip.cancelada { background: rgba(201,96,63,0.16); color: #F0A08A; border: 1px solid rgba(201,96,63,0.5); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -523,8 +594,11 @@ form { display: flex; flex-direction: column; gap: 16px; }
       <span>Ajedrez entre Amigos</span>
     </a>
     <div class="cabecera-derecha oculto" id="cabecera-usuario">
-      <span class="avatar" id="mi-icono"></span>
-      <span id="mi-nombre"></span>
+      <button type="button" class="mi-cuenta" id="mi-cuenta" aria-label="Ajustes de tu cuenta" title="Ajustes de tu cuenta">
+        <span class="avatar" id="mi-icono"></span>
+        <span id="mi-nombre"></span>
+        <svg class="engrane" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
       <button id="salir" class="secundario">Salir</button>
     </div>
   </header>
@@ -651,6 +725,11 @@ form { display: flex; flex-direction: column; gap: 16px; }
             <div id="en-linea" class="lista"></div>
           </section>
 
+          <section class="tarjeta-club" aria-labelledby="t-mias">
+            <div class="cabeza"><h2 id="t-mias">Mis partidas</h2><span id="cuenta-mias"></span></div>
+            <div id="mis-partidas" class="lista"></div>
+          </section>
+
           <section class="tarjeta-club" aria-labelledby="t-numeros">
             <h2 id="t-numeros">Tus números</h2>
             <div class="numeros">
@@ -680,7 +759,7 @@ form { display: flex; flex-direction: column; gap: 16px; }
       <div class="zona-tablero">
         <div class="jugador" id="arriba"></div>
         <div class="hud" id="hud" aria-live="polite"></div>
-        <div class="escena"><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div>
+        <div class="escena"><div id="aviso-pausa" class="aviso-pausa oculto" role="status"></div><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div>
           <button type="button" id="maximizar" class="maximizar" aria-label="Agrandar el tablero a pantalla completa" aria-pressed="false" title="Pantalla completa"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="icono-abrir" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="icono-cerrar" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
         </div>
         <div class="jugador" id="abajo"></div>
@@ -720,6 +799,33 @@ form { display: flex; flex-direction: column; gap: 16px; }
           <p class="video-nota" id="video-nota">Todo empieza apagado. Enciende tu cámara o micrófono cuando quieras.</p>
         </div>
         <div class="panel">
+          <div id="control-estado" class="control-estado oculto">
+            <button type="button" id="pill-estado" class="pill-estado jugando" aria-expanded="false" aria-controls="menu-estado">
+              <span class="pill-icono" aria-hidden="true"></span><span id="pill-texto">PLAYING</span>
+              <svg class="pill-flecha" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div id="menu-estado" class="menu-estado oculto">
+              <div id="menu-pausar" class="menu-grupo">
+                <span class="menu-titulo">Pausar la partida</span>
+                <div class="menu-opciones">
+                  <button type="button" data-pausa="5" data-motivo="Regreso en 5 min">Regreso en 5 min</button>
+                  <button type="button" data-pausa="15" data-motivo="Regreso en 15 min">Regreso en 15 min</button>
+                  <button type="button" data-pausa="60" data-motivo="Tengo junta">Tengo junta</button>
+                  <button type="button" data-pausa="" data-motivo="Regreso más tarde">Regreso más tarde</button>
+                </div>
+                <div class="menu-otro"><input id="pausa-otro" type="text" maxlength="80" placeholder="Otro motivo (opcional)"><button type="button" class="btn-fila dorado" id="pausa-otro-btn">Pausar</button></div>
+              </div>
+              <div id="menu-reanudar" class="menu-grupo oculto">
+                <button type="button" class="btn-grande verde" id="reanudar">▶ Reanudar partida</button>
+                <span class="menu-nota" id="reanudar-nota"></span>
+              </div>
+              <div class="menu-grupo">
+                <span class="menu-titulo">Cancelar la partida</span>
+                <div class="menu-otro"><input id="cancelar-motivo" type="text" maxlength="80" placeholder="Motivo (opcional), p. ej. Tengo junta"><button type="button" class="btn-fila rojo" id="cancelar-juego">Cancelar</button></div>
+                <span class="menu-nota">No cuenta en la mesa del club.</span>
+              </div>
+            </div>
+          </div>
           <p id="estado">Cargando partida…</p>
           <div id="invitar" class="invitar oculto">
             <h2>Llama a un amigo</h2>
@@ -760,6 +866,49 @@ form { display: flex; flex-direction: column; gap: 16px; }
       </aside>
     </section>
   </main>
+</div>
+<div id="ajustes" class="ajustes oculto" role="dialog" aria-modal="true" aria-labelledby="ajustes-titulo">
+  <div class="ajustes-tarjeta">
+    <div class="ajustes-cabeza"><h2 id="ajustes-titulo">Tu cuenta</h2><button type="button" class="cerrar-x" id="ajustes-cerrar" aria-label="Cerrar">×</button></div>
+
+    <form id="form-perfil" class="ajustes-seccion">
+      <div class="foto-fila">
+        <span class="foto-grande" id="foto-vista"></span>
+        <div class="foto-botones">
+          <label class="secundario chico-btn" for="foto-archivo">Subir foto</label>
+          <input id="foto-archivo" type="file" accept="image/*" class="solo-lector">
+          <button type="button" class="enlace-olvide" id="foto-quitar">Quitar foto</button>
+          <small>Se recorta en cuadro y se guarda pequeña.</small>
+        </div>
+      </div>
+      <div class="campo"><label for="aj-nombre">Nombre de jugador</label><input id="aj-nombre" type="text" minlength="2" maxlength="20" autocomplete="off" required></div>
+      <fieldset class="campo genero-chico">
+        <legend>Ícono cuando no hay foto</legend>
+        <label><input type="radio" name="aj-avatar" value="rey"> Rey</label>
+        <label><input type="radio" name="aj-avatar" value="dama"> Dama</label>
+      </fieldset>
+      <button class="primario" type="submit">Guardar cambios</button>
+    </form>
+
+    <form id="form-cambiar-clave" class="ajustes-seccion">
+      <h3>Cambiar contraseña</h3>
+      <div class="campo"><label for="aj-actual">Contraseña actual</label><div class="clave"><input id="aj-actual" type="password" autocomplete="current-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
+      <div class="campo"><label for="aj-nueva">Nueva</label><div class="clave"><input id="aj-nueva" type="password" minlength="6" autocomplete="new-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
+      <div class="campo"><label for="aj-nueva2">Confírmala</label><div class="clave"><input id="aj-nueva2" type="password" minlength="6" autocomplete="new-password" required><button type="button" class="ojo" aria-label="Mostrar contraseña" aria-pressed="false"></button></div></div>
+      <button class="secundario" type="submit">Cambiar contraseña</button>
+    </form>
+
+    <div class="ajustes-seccion baja">
+      <h3>Darme de baja del club</h3>
+      <p>Se borran tu cuenta, tu foto, tus mensajes y las partidas que creaste. Si después quieres regresar, te registras de nuevo con la clave del club.</p>
+      <button type="button" class="secundario peligro" id="baja-1">Eliminar mi cuenta</button>
+      <div id="baja-confirmar" class="baja-confirmar oculto">
+        <label for="baja-texto">Para confirmar, escribe <strong>BAJA</strong></label>
+        <input id="baja-texto" type="text" autocomplete="off">
+        <button type="button" class="peligro-lleno" id="baja-2" disabled>Sí, eliminar mi cuenta para siempre</button>
+      </div>
+    </div>
+  </div>
 </div>
 <div id="coronar" class="oculto" role="dialog" aria-modal="true" aria-labelledby="coronar-titulo">
   <div class="tarjeta">
