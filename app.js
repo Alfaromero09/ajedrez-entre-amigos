@@ -1427,6 +1427,8 @@ let canalListo = false;
 let pc = null;            // conexión con el rival
 let videoDe = null;       // id de la partida con video activo
 let pendientesIce = [];
+let sesionRtc = 0;       // identifica cada negociación para ignorar mensajes viejos
+let ultimaOferta = 0;
 let local = { video: null, audio: null };
 let enviadores = { video: null, audio: null };
 let flujoRival = null;
@@ -1469,23 +1471,29 @@ function nuevaConexion() {
   $("video-rival").srcObject = flujoRival;
   pc.ontrack = (e) => {
     flujoRival.addTrack(e.track);
+    e.track.onunmute = () => { if (rivalCam) $("rival-apagado").classList.add("oculto"); };
     const v = $("video-rival");
     v.muted = false;
     // Si el navegador bloquea el sonido automático, se muestra el video en silencio y un botón para activarlo
     v.play().catch(() => { v.muted = true; v.play().catch(() => {}); $("activar-sonido").classList.remove("oculto"); });
   };
-  pc.onicecandidate = (e) => { if (e.candidate) enviarRtc({ tipo: "ice", candidato: e.candidate.toJSON() }); };
+  pc.onicecandidate = (e) => { if (e.candidate) enviarRtc({ tipo: "ice", sesion: sesionRtc, candidato: e.candidate.toJSON() }); };
   pc.onconnectionstatechange = () => {
+    if (pc && pc.connectionState === "connected" && rivalCam) $("rival-estado").textContent = "Cámara encendida";
     if (pc && pc.connectionState === "failed") $("video-nota").textContent = "No se pudo conectar el video directo entre ustedes (puede ser la red). El juego sigue normal.";
   };
   return pc;
 }
 
 async function ofrecer() {
+  // Evita ofertas repetidas cuando llegan dos saludos casi juntos
+  if (Date.now() - ultimaOferta < 1500) return;
+  ultimaOferta = Date.now();
+  sesionRtc = Date.now();
   nuevaConexion();
   const oferta = await pc.createOffer();
   await pc.setLocalDescription(oferta);
-  enviarRtc({ tipo: "oferta", sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+  enviarRtc({ tipo: "oferta", sesion: sesionRtc, sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
 }
 
 async function recibirRtc(m) {
@@ -1497,18 +1505,20 @@ async function recibirRtc(m) {
       else if (!m.eco) enviarRtc({ tipo: "hola", eco: true });
       enviarRtc({ tipo: "medios", cam: !!local.video, mic: !!local.audio });
     } else if (m.tipo === "oferta" && miColor() === "b") {
+      sesionRtc = m.sesion;
       nuevaConexion();
       await pc.setRemoteDescription(m.sdp);
       for (const c of pendientesIce) await pc.addIceCandidate(c).catch(() => {});
       pendientesIce = [];
       const resp = await pc.createAnswer();
       await pc.setLocalDescription(resp);
-      enviarRtc({ tipo: "respuesta", sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
-    } else if (m.tipo === "respuesta" && pc && miColor() === "w") {
+      enviarRtc({ tipo: "respuesta", sesion: sesionRtc, sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+    } else if (m.tipo === "respuesta" && pc && miColor() === "w" && m.sesion === sesionRtc && pc.signalingState === "have-local-offer") {
       await pc.setRemoteDescription(m.sdp);
       for (const c of pendientesIce) await pc.addIceCandidate(c).catch(() => {});
       pendientesIce = [];
     } else if (m.tipo === "ice") {
+      if (m.sesion !== sesionRtc) return;
       if (pc && pc.remoteDescription) await pc.addIceCandidate(m.candidato).catch(() => {});
       else pendientesIce.push(m.candidato);
     } else if (m.tipo === "medios") {
@@ -1519,10 +1529,15 @@ async function recibirRtc(m) {
   }
 }
 
+let rivalCam = false;
 function pintarMedios(m) {
-  $("rival-apagado").classList.toggle("oculto", !!m.cam);
+  rivalCam = !!m.cam;
+  const v = $("video-rival");
+  const llegando = rivalCam && v.srcObject && v.srcObject.getVideoTracks().some((t) => !t.muted);
+  $("rival-apagado").classList.toggle("oculto", !!llegando);
+  if (rivalCam && !llegando) $("rival-estado").textContent = "Conectando cámara…";
   $("rival-mic-off").classList.toggle("oculto", !!m.mic || !m.cam && !m.mic);
-  if (!m.cam) $("rival-estado").textContent = m.mic ? "Solo micrófono" : "Cámara apagada";
+  if (!rivalCam) $("rival-estado").textContent = m.mic ? "Solo micrófono" : "Cámara apagada";
 }
 
 async function alternar(tipo) {
@@ -1549,6 +1564,7 @@ async function alternar(tipo) {
   }
   enviarRtc({ tipo: "medios", cam: !!local.video, mic: !!local.audio });
 }
+$("video-rival").addEventListener("playing", () => { if (rivalCam) $("rival-apagado").classList.add("oculto"); });
 $("btn-camara").addEventListener("click", () => alternar("video"));
 $("btn-mic").addEventListener("click", () => alternar("audio"));
 $("activar-sonido").addEventListener("click", () => {
@@ -1571,6 +1587,59 @@ function cerrarVideo() {
   $("video").classList.add("oculto");
 }
 window.addEventListener("beforeunload", () => { for (const t of ["video", "audio"]) local[t]?.stop(); });
+
+// ---------- Mover tu cámara dentro del recuadro (cada quien la acomoda a su gusto) ----------
+let esquinaYo = "tr";
+const MARGEN_YO = 8;
+function posicionEsquina(esq) {
+  const marco = $("caja-yo").parentElement, caja = $("caja-yo");
+  const ancho = marco.clientWidth - caja.offsetWidth - MARGEN_YO, alto = marco.clientHeight - caja.offsetHeight - MARGEN_YO;
+  return { x: esq.includes("l") ? MARGEN_YO : ancho, y: esq.includes("t") ? MARGEN_YO : alto };
+}
+function colocarYo() {
+  const { x, y } = posicionEsquina(esquinaYo);
+  $("caja-yo").style.transform = `translate(${x}px, ${y}px)`;
+}
+new ResizeObserver(colocarYo).observe($("caja-yo").parentElement);
+$("mover-yo").addEventListener("click", (e) => {
+  e.stopPropagation();
+  esquinaYo = { tr: "br", br: "bl", bl: "tl", tl: "tr" }[esquinaYo];
+  colocarYo();
+});
+(() => {
+  const caja = $("caja-yo");
+  let arrastre = null;
+  caja.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("#mover-yo")) return;
+    const actual = posicionEsquina(esquinaYo);
+    arrastre = { id: e.pointerId, x0: e.clientX - actual.x, y0: e.clientY - actual.y };
+    caja.setPointerCapture(e.pointerId);
+    caja.classList.add("arrastrando");
+  });
+  caja.addEventListener("pointermove", (e) => {
+    if (!arrastre || e.pointerId !== arrastre.id) return;
+    const marco = caja.parentElement;
+    const x = Math.min(Math.max(0, e.clientX - arrastre.x0), marco.clientWidth - caja.offsetWidth);
+    const y = Math.min(Math.max(0, e.clientY - arrastre.y0), marco.clientHeight - caja.offsetHeight);
+    caja.style.transform = `translate(${x}px, ${y}px)`;
+    arrastre.x = x; arrastre.y = y;
+  });
+  const soltar = () => {
+    if (!arrastre) return;
+    const marco = caja.parentElement;
+    if (arrastre.x !== undefined) {
+      // Se acomoda en la esquina más cercana
+      const izq = arrastre.x + caja.offsetWidth / 2 < marco.clientWidth / 2;
+      const arriba = arrastre.y + caja.offsetHeight / 2 < marco.clientHeight / 2;
+      esquinaYo = (arriba ? "t" : "b") + (izq ? "l" : "r");
+    }
+    arrastre = null;
+    caja.classList.remove("arrastrando");
+    colocarYo();
+  };
+  caja.addEventListener("pointerup", soltar);
+  caja.addEventListener("pointercancel", soltar);
+})();
 
 // ---------- Tablero a pantalla completa ----------
 function ponerEnfoque(activar) {
