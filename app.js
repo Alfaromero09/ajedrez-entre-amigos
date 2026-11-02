@@ -1357,6 +1357,8 @@ function dibujar() {
   $("unirse").classList.toggle("oculto", !(partida.estado === "esperando" && color !== "w" && (!partida.reservada_para || partida.reservada_para === yo)));
   $("acciones-juego").classList.toggle("oculto", !(jugando && color));
   pintarTablas(color);
+  // Quien solo mira la partida no ve el chat de los jugadores (ni la cámara)
+  $("chat").classList.toggle("oculto", !color);
   $("form-chat").classList.toggle("oculto", !color);
   textoChatVacio();
   avisarTurno(color, turno);
@@ -1629,6 +1631,7 @@ async function cargarChat(id) {
   chatDe = id;
   vistos.clear();
   $("mensajes").innerHTML = "";
+  if (!miColor()) return;
   const { data } = await sb.from("mensajes").select("*").eq("partida", id).order("id", { ascending: true }).limit(200);
   if (chatDe !== id) return;
   (data || []).forEach((m) => agregarMensaje(m, false));
