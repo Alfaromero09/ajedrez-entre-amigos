@@ -38,6 +38,7 @@ function mostrar(vista) {
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
   if (vista !== "partida" && document.body.classList.contains("enfoque")) ponerEnfoque(false);
   if (vista === "inicio") {
+    cerrarVideo();
     if (canal) { sb.removeChannel(canal); canal = null; }
     partida = null;
     cargarClub();
@@ -749,10 +750,12 @@ async function abrirPartida(id) {
   pintarMesaPartida();
   dibujar();
 
+  cerrarVideo();
   if (canal) sb.removeChannel(canal);
   canal = sb
     .channel(`partida-${id}`)
     .on("broadcast", { event: "jugada" }, ({ payload }) => aplicarRemota(payload))
+    .on("broadcast", { event: "rtc" }, ({ payload }) => recibirRtc(payload))
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensajes", filter: `partida=eq.${id}` }, ({ new: m }) => agregarMensaje(m, true))
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "partidas", filter: `id=eq.${id}` }, async (cambio) => {
       if (cambio.new.version > partida.version || (cambio.new.version === partida.version && !partida.optimista)) {
@@ -765,6 +768,8 @@ async function abrirPartida(id) {
     })
     .subscribe(async (estado) => {
       if (estado === "SUBSCRIBED") {
+        canalListo = true;
+        revisarVideo();
         const fresca = await recargar(id);
         if (fresca && fresca.version > partida.version) {
           partida = fresca;
@@ -1113,6 +1118,7 @@ function dibujar() {
   pintarHud(juego, color, turno, material);
   estado.classList.toggle("cierre", partida.estado === "terminada");
   revisarFinal();
+  revisarVideo();
   if (mesaPartidaDe && mesaPartidaDe !== `${partida.id}:${partida.estado}`) pintarMesaPartida();
 
   const lista = $("jugadas");
@@ -1411,6 +1417,158 @@ async function pintarMesaPartida() {
   caja.innerHTML = `<span>Cara a cara</span><strong>${ga} – ${gb}</strong><span>${esc(na)} vs ${esc(nb)}${t ? ` · ${t} ${t === 1 ? "tablas" : "tablas"}` : ""}</span>`;
   caja.classList.remove("oculto");
 }
+
+// ---------- Cámara y micrófono (WebRTC entre los dos jugadores) ----------
+// Señalización por el canal de la partida; el video viaja directo entre navegadores.
+const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+let canalListo = false;
+let pc = null;            // conexión con el rival
+let videoDe = null;       // id de la partida con video activo
+let pendientesIce = [];
+let local = { video: null, audio: null };
+let enviadores = { video: null, audio: null };
+let flujoRival = null;
+
+function rivalDe() {
+  const c = miColor();
+  return c === "w" ? partida.negras : c === "b" ? partida.blancas : null;
+}
+function enviarRtc(datos) {
+  if (canal && canalListo) canal.send({ type: "broadcast", event: "rtc", payload: { ...datos, de: yo, partida: partida.id } }).catch?.(() => {});
+}
+
+// Muestra el panel y arranca la señalización cuando ya hay dos jugadores
+function revisarVideo() {
+  if (!partida) return;
+  const rival = rivalDe();
+  const hay = !!rival && partida.estado !== "esperando";
+  $("video").classList.toggle("oculto", !hay);
+  if (!hay || !canalListo) return;
+  if (videoDe !== partida.id) {
+    videoDe = partida.id;
+    $("rival-nombre").textContent = nombres[rival] || "Rival";
+    $("rival-ficha").innerHTML = iconoSVG(avatares[rival] || "rey");
+    $("rival-estado").textContent = "Cámara apagada";
+    pintarMedios({ cam: false, mic: false });
+    enviarRtc({ tipo: "hola" });
+  }
+}
+
+function nuevaConexion() {
+  if (pc) pc.close();
+  pendientesIce = [];
+  pc = new RTCPeerConnection({ iceServers: ICE });
+  // Un canal de audio y uno de video desde el inicio: encender o apagar no requiere renegociar
+  enviadores.audio = pc.addTransceiver("audio", { direction: "sendrecv" }).sender;
+  enviadores.video = pc.addTransceiver("video", { direction: "sendrecv" }).sender;
+  if (local.audio) enviadores.audio.replaceTrack(local.audio);
+  if (local.video) enviadores.video.replaceTrack(local.video);
+  flujoRival = new MediaStream();
+  $("video-rival").srcObject = flujoRival;
+  pc.ontrack = (e) => {
+    flujoRival.addTrack(e.track);
+    const v = $("video-rival");
+    v.muted = false;
+    // Si el navegador bloquea el sonido automático, se muestra el video en silencio y un botón para activarlo
+    v.play().catch(() => { v.muted = true; v.play().catch(() => {}); $("activar-sonido").classList.remove("oculto"); });
+  };
+  pc.onicecandidate = (e) => { if (e.candidate) enviarRtc({ tipo: "ice", candidato: e.candidate.toJSON() }); };
+  pc.onconnectionstatechange = () => {
+    if (pc && pc.connectionState === "failed") $("video-nota").textContent = "No se pudo conectar el video directo entre ustedes (puede ser la red). El juego sigue normal.";
+  };
+  return pc;
+}
+
+async function ofrecer() {
+  nuevaConexion();
+  const oferta = await pc.createOffer();
+  await pc.setLocalDescription(oferta);
+  enviarRtc({ tipo: "oferta", sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+}
+
+async function recibirRtc(m) {
+  if (!partida || m.partida !== partida.id || m.de === yo || m.de !== rivalDe()) return;
+  try {
+    if (m.tipo === "hola") {
+      // Las blancas siempre inician; las negras contestan el saludo para que las blancas se enteren
+      if (miColor() === "w") await ofrecer();
+      else if (!m.eco) enviarRtc({ tipo: "hola", eco: true });
+      enviarRtc({ tipo: "medios", cam: !!local.video, mic: !!local.audio });
+    } else if (m.tipo === "oferta" && miColor() === "b") {
+      nuevaConexion();
+      await pc.setRemoteDescription(m.sdp);
+      for (const c of pendientesIce) await pc.addIceCandidate(c).catch(() => {});
+      pendientesIce = [];
+      const resp = await pc.createAnswer();
+      await pc.setLocalDescription(resp);
+      enviarRtc({ tipo: "respuesta", sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+    } else if (m.tipo === "respuesta" && pc && miColor() === "w") {
+      await pc.setRemoteDescription(m.sdp);
+      for (const c of pendientesIce) await pc.addIceCandidate(c).catch(() => {});
+      pendientesIce = [];
+    } else if (m.tipo === "ice") {
+      if (pc && pc.remoteDescription) await pc.addIceCandidate(m.candidato).catch(() => {});
+      else pendientesIce.push(m.candidato);
+    } else if (m.tipo === "medios") {
+      pintarMedios(m);
+    }
+  } catch (e) {
+    console.warn("Video:", e);
+  }
+}
+
+function pintarMedios(m) {
+  $("rival-apagado").classList.toggle("oculto", !!m.cam);
+  $("rival-mic-off").classList.toggle("oculto", !!m.mic || !m.cam && !m.mic);
+  if (!m.cam) $("rival-estado").textContent = m.mic ? "Solo micrófono" : "Cámara apagada";
+}
+
+async function alternar(tipo) {
+  const boton = tipo === "video" ? $("btn-camara") : $("btn-mic");
+  if (local[tipo]) {
+    local[tipo].stop();
+    local[tipo] = null;
+    if (enviadores[tipo]) await enviadores[tipo].replaceTrack(null).catch(() => {});
+  } else {
+    try {
+      const flujo = await navigator.mediaDevices.getUserMedia(tipo === "video"
+        ? { video: { width: { ideal: 640 }, height: { ideal: 480 } } }
+        : { audio: { echoCancellation: true, noiseSuppression: true } });
+      local[tipo] = tipo === "video" ? flujo.getVideoTracks()[0] : flujo.getAudioTracks()[0];
+      if (enviadores[tipo]) await enviadores[tipo].replaceTrack(local[tipo]).catch(() => {});
+    } catch {
+      return avisar(tipo === "video" ? "No se pudo usar la cámara. Revisa el permiso del navegador." : "No se pudo usar el micrófono. Revisa el permiso del navegador.");
+    }
+  }
+  boton.setAttribute("aria-pressed", String(!!local[tipo]));
+  if (tipo === "video") {
+    $("video-yo").srcObject = local.video ? new MediaStream([local.video]) : null;
+    $("yo-apagado").classList.toggle("oculto", !!local.video);
+  }
+  enviarRtc({ tipo: "medios", cam: !!local.video, mic: !!local.audio });
+}
+$("btn-camara").addEventListener("click", () => alternar("video"));
+$("btn-mic").addEventListener("click", () => alternar("audio"));
+$("activar-sonido").addEventListener("click", () => {
+  const v = $("video-rival");
+  v.muted = false;
+  v.play().then(() => $("activar-sonido").classList.add("oculto"), () => {});
+});
+
+function cerrarVideo() {
+  for (const t of ["video", "audio"]) { if (local[t]) { local[t].stop(); local[t] = null; } }
+  if (pc) { pc.close(); pc = null; }
+  videoDe = null;
+  canalListo = false;
+  pendientesIce = [];
+  $("btn-camara").setAttribute("aria-pressed", "false");
+  $("btn-mic").setAttribute("aria-pressed", "false");
+  $("video-yo").srcObject = null;
+  $("video-rival").srcObject = null;
+  $("yo-apagado").classList.remove("oculto");
+  $("video").classList.add("oculto");
+}
+window.addEventListener("beforeunload", () => { for (const t of ["video", "audio"]) local[t]?.stop(); });
 
 // ---------- Tablero a pantalla completa ----------
 function ponerEnfoque(activar) {
