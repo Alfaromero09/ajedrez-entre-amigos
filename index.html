@@ -267,9 +267,11 @@ body.enfoque .maximizar .icono-cerrar { display: inline; }
 .casilla.elegida { box-shadow: inset 0 0 0 3px var(--laton-claro); }
 .casilla.jugable { cursor: pointer; }
 /* Casillas a donde puedes mover: brillo suave en lugar de puntitos */
-.casilla.destino::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(127,200,110,0.55) 0%, rgba(127,200,110,0.22) 42%, transparent 72%); pointer-events: none; }
-.casilla.destino.ocupada::after { background: none; box-shadow: inset 0 0 0 4px rgba(226,96,70,0.75), inset 0 0 18px rgba(226,96,70,0.45); }
-.casilla.sobre::after { content: ""; position: absolute; inset: 0; background: rgba(127,200,110,0.45); box-shadow: inset 0 0 0 3px rgba(190,240,170,0.95); pointer-events: none; }
+.casilla.destino::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle, rgba(88,214,70,1) 0%, rgba(88,214,70,0.92) 22%, rgba(88,214,70,0.6) 45%, rgba(88,214,70,0.22) 68%, transparent 82%);
+  box-shadow: inset 0 0 0 2px rgba(88,214,70,0.55); }
+.casilla.destino.ocupada::after { background: radial-gradient(circle, transparent 52%, rgba(232,80,56,0.55) 70%, rgba(232,80,56,0.9) 100%); box-shadow: inset 0 0 0 4px rgba(232,80,56,0.95); }
+.casilla.sobre::after { content: ""; position: absolute; inset: 0; background: rgba(88,214,70,0.7); box-shadow: inset 0 0 0 4px rgba(210,255,190,1); pointer-events: none; }
 .casilla.sobre.ocupada::after { background: rgba(226,96,70,0.35); box-shadow: inset 0 0 0 3px rgba(255,170,150,0.95); }
 .casilla.origen-arrastre .pieza { opacity: 0.28; }
 .tablero { touch-action: none; }
