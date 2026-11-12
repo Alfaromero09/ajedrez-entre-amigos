@@ -839,6 +839,14 @@ body.enfoque .ent-leyenda { display: none; }
 .ent-contexto p { margin: 0; font-size: 13px; line-height: 1.55; color: #E2D3B8; }
 .ctx-linea { font-variant-numeric: tabular-nums; color: #CFE3F5 !important; }
 .ent-tema-cabeza .ver-ctx { color: var(--laton-claro); }
+
+/* ---------- Pantalla completa: plan y sugerencias en su propia columna, junto al tablero ---------- */
+.lateral-plan { display: none; }
+body.enfoque.plan-aparte #partida { grid-template-columns: minmax(0, 1fr) 300px 320px !important; }
+body.enfoque.plan-aparte .lateral-plan { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid rgba(111,168,220,0.35); }
+body.enfoque .ent-contexto { max-height: 190px; overflow-y: auto; }
+body.enfoque .lateral { max-height: calc(100vh - 16px); overflow-y: auto; }
+.plan-resumen { font-size: 13px; color: #A9CB9A; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -1057,6 +1065,7 @@ body.enfoque .ent-leyenda { display: none; }
           </div>
         </div>
       </div>
+      <aside class="lateral-plan" id="lateral-plan" aria-label="Plan y sugerencias del entrenador"></aside>
       <aside class="lateral">
         <section id="entrenador" class="entrenador oculto" aria-live="polite" aria-labelledby="ent-titulo">
           <div class="ent-cabeza">

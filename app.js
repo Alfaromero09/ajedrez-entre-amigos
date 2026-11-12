@@ -63,7 +63,7 @@ const vieneDeConfirmar = !vieneDeRecuperar && (/type=(signup|email|invite)/.test
 const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
 function mostrar(vista) {
-  if (vista !== "partida") document.body.classList.remove("sin-reloj", "vs-maquina");
+  if (vista !== "partida") document.body.classList.remove("sin-reloj", "vs-maquina", "plan-aparte");
   $("ir-inicio")?.classList.toggle("oculto", vista !== "partida");
   if (vista === "acceso" && typeof prepararAcceso === "function") prepararAcceso();
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
@@ -1728,39 +1728,56 @@ function textoFase(valor) {
 }
 function pintarPlan() {
   const caja = $("ent-plan");
-  if (!partida?.didactico || vistaIndice !== null) { caja.innerHTML = ""; return; }
+  if (!partida?.didactico || vistaIndice !== null) { caja.innerHTML = ""; ubicarPlan(); return; }
   const t = temaActivo();
-  let html = "";
   const miTurno = partida.estado === "jugando" && new Chess(partida.fen).turn() === miColor();
-  // Lista del plan con la siguiente jugada en verde
-  if (t && t.color === miColor()) {
-    const mias = partida.jugadas.map((j) => limpiaSan(j.san)).filter((_, i) => (i % 2 === 0) === (t.color === "w"));
-    html += `<div class="plan-caja"><span class="plan-titulo"><span>Plan · ${esc(t.nombre)}</span><span>${esc(t.tipo || "")}</span></span><ol class="plan-lista">` +
-      t.plan.map(([san, texto]) => {
-        const hecho = mias.includes(limpiaSan(san));
-        const sig = guiaActual && !guiaActual.fin && limpiaSan(guiaActual.san) === limpiaSan(san);
-        const imposible = !hecho && miTurno && !sig && !movLegal(partida.fen, san);
-        const marca = hecho ? "✅" : sig ? "👉" : imposible ? "·" : "○";
-        return `<li class="${hecho ? "hecho" : sig ? "siguiente" : imposible ? "imposible" : ""}"><span>${marca}</span><b>${esc(sanEs(san))}</b><span>${esc(texto)}</span></li>`;
-      }).join("") + "</ol></div>";
-  }
-  // El entrenador improvisa: si otro plan encaja mejor, lo propone
+  let html = "";
+  // 1) Lo más importante arriba: si conviene cambiar de plan
   if (miTurno) {
     const sug = temasSugeridos();
     const actual = t ? puntajeTema(t) : 0;
     const atorado = t && (!guiaActual || guiaActual.fin);
     const mejores = sug.filter((x) => x.t.id !== t?.id && (atorado || x.p > actual + 1.5)).slice(0, 3);
     if (mejores.length) {
-      html += `<div class="cambio-plan"><p>${t ? `🔄 La partida tomó otro rumbo: tu posición ahora encaja mejor con` : "💡 Planes que encajan con tu posición:"}</p><div class="chips">` +
+      html += `<div class="cambio-plan"><p>${t ? "🔄 La partida tomó otro rumbo: tu posición ahora encaja mejor con" : "💡 Planes que encajan con tu posición:"}</p><div class="chips">` +
         mejores.map((x) => `<button type="button" data-cambiar-tema="${x.t.id}">${esc(x.t.nombre)} · ${esc(x.t.tipo || "")}</button>`).join("") + "</div></div>";
     }
   }
-  // Fase de la partida y estructura
+  // 2) La fase: atacar, defender o mejorar piezas
   if (miTurno && analisisTurno?.fen === partida.fen) html += textoFase(analisisTurno.lineas[0]?.valor);
+  // 3) El plan del tema, con la siguiente jugada en verde (compacto si ya lo terminaste)
+  if (t && t.color === miColor()) {
+    const mias = partida.jugadas.map((j) => limpiaSan(j.san)).filter((_, i) => (i % 2 === 0) === (t.color === "w"));
+    const hechos = t.plan.filter(([san]) => mias.includes(limpiaSan(san))).length;
+    if (hechos === t.plan.length) {
+      html += `<div class="plan-caja"><span class="plan-titulo"><span>Plan · ${esc(t.nombre)}</span><span>${esc(t.tipo || "")}</span></span><span class="plan-resumen">✅ Completaste las ${t.plan.length} jugadas del plan.</span></div>`;
+    } else {
+      html += `<div class="plan-caja"><span class="plan-titulo"><span>Plan · ${esc(t.nombre)} (${hechos}/${t.plan.length})</span><span>${esc(t.tipo || "")}</span></span><ol class="plan-lista">` +
+        t.plan.map(([san, texto]) => {
+          const hecho = mias.includes(limpiaSan(san));
+          const sig = guiaActual && !guiaActual.fin && limpiaSan(guiaActual.san) === limpiaSan(san);
+          const imposible = !hecho && miTurno && !sig && !movLegal(partida.fen, san);
+          const marca = hecho ? "✅" : sig ? "👉" : imposible ? "·" : "○";
+          return `<li class="${hecho ? "hecho" : sig ? "siguiente" : imposible ? "imposible" : ""}"><span>${marca}</span><b>${esc(sanEs(san))}</b><span>${esc(texto)}</span></li>`;
+        }).join("") + "</ol></div>";
+    }
+  }
+  // 4) La estructura de peones
   const notas = Math.ceil(partida.jugadas.length / 2) >= 4 ? notasEstructura(partida.fen, miColor()) : [];
   if (notas.length) html += `<div class="plan-caja"><span class="plan-titulo">🧱 Estructura de peones</span><ul class="estructura">${notas.map((n) => `<li>${n}</li>`).join("")}</ul></div>`;
   caja.innerHTML = html;
+  ubicarPlan();
 }
+// En pantalla completa y pantallas anchas, el plan va en su propia columna junto al tablero
+const pantallaPlan = matchMedia("(min-width: 1200px)");
+function ubicarPlan() {
+  const plan = $("ent-plan");
+  const aparte = document.body.classList.contains("enfoque") && pantallaPlan.matches && !!partida?.didactico && plan.innerHTML.trim() !== "";
+  document.body.classList.toggle("plan-aparte", aparte);
+  if (aparte) { if (plan.parentElement !== $("lateral-plan")) $("lateral-plan").appendChild(plan); }
+  else if (plan.parentElement !== $("entrenador")) $("rep-jugar").after(plan);
+}
+pantallaPlan.addEventListener?.("change", ubicarPlan);
 $("ent-plan").addEventListener("click", (e) => {
   const b = e.target.closest("[data-cambiar-tema]");
   if (!b) return;
@@ -3212,6 +3229,7 @@ $("form-club").addEventListener("submit", async (e) => {
 function ponerEnfoque(activar) {
   document.body.classList.toggle("enfoque", activar);
   ubicarChat();
+  ubicarPlan();
   const b = $("maximizar");
   b.setAttribute("aria-pressed", String(activar));
   b.setAttribute("aria-label", activar ? "Salir de pantalla completa" : "Agrandar el tablero a pantalla completa");
