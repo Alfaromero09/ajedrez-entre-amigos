@@ -256,7 +256,7 @@ body.enfoque .escena { max-width: min(100%, calc(100vh - 240px)); padding: 32px 
 body.enfoque .jugador, body.enfoque .hud { max-width: min(100%, calc(100vh - 240px)); }
 body.enfoque .maximizar .icono-abrir { display: none; }
 body.enfoque .maximizar .icono-cerrar { display: inline; }
-.marco { background: #4A2F1C; padding: 12px; border-radius: 14px; transform-origin: 50% 100%; transform-style: preserve-3d; box-shadow: var(--sombra-2); transition: transform 200ms var(--resorte); }
+.marco { background: #4A2F1C; padding: 22px; border-radius: 14px; transform-origin: 50% 100%; transform-style: preserve-3d; box-shadow: var(--sombra-2); transition: transform 200ms var(--resorte); }
 .tablero { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); aspect-ratio: 1 / 1; transform-style: preserve-3d; }
 .casilla { position: relative; border: 0; padding: 0; transform-style: preserve-3d; cursor: default; }
 .casilla:hover, .casilla:active { transform: none; }
@@ -818,6 +818,27 @@ body.enfoque .ent-leyenda { display: none; }
 .cambio-plan button:hover { background: rgba(95,191,90,0.28); transform: none; }
 .estructura { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: #E2D3B8; }
 .estructura li::before { content: "• "; color: var(--laton-claro); }
+
+/* ---------- Coordenadas fuera del tablero ---------- */
+.coords { position: absolute; inset: 0; pointer-events: none; transform: translateZ(4px); transform-style: preserve-3d; }
+.coords span { position: absolute; font-size: 12px; font-weight: 600; line-height: 1; color: rgba(243,234,218,0.72); font-variant-numeric: tabular-nums; text-transform: lowercase; }
+.coords .crd-l { bottom: -17px; transform: translateX(-50%); }
+.coords .crd-n { left: -15px; transform: translateY(-50%); }
+.marco:has(.coords) { box-shadow: var(--sombra-2), inset 0 0 0 1px rgba(255,240,215,0.06); }
+@media (max-width: 640px) { .marco { padding: 16px; } .coords span { font-size: 10px; } .coords .crd-l { bottom: -13px; } .coords .crd-n { left: -11px; } }
+/* ---------- Contexto de la apertura ---------- */
+.ent-apertura { cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
+.ent-apertura::after { content: " ⓘ"; opacity: 0.8; }
+.ent-apertura:hover { background: rgba(205,165,78,0.26); transform: none; }
+.ent-contexto { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: linear-gradient(180deg, rgba(205,165,78,0.10), rgba(205,165,78,0.03)); border: 1px solid rgba(205,165,78,0.4); animation: subir 300ms var(--resorte) both; }
+.ctx-cabeza { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ctx-cabeza h3 { margin: 0; font-size: 18px; color: var(--texto); }
+.ctx-cabeza button { border: 0; background: none; color: var(--suave); font-size: 18px; line-height: 1; padding: 0 4px; }
+.ctx-tipo { align-self: flex-start; padding: 2px 9px; border-radius: 999px; background: rgba(205,165,78,0.18); color: var(--laton-claro); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+.ent-contexto h4 { margin: 4px 0 0; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--laton-claro); font-family: inherit; }
+.ent-contexto p { margin: 0; font-size: 13px; line-height: 1.55; color: #E2D3B8; }
+.ctx-linea { font-variant-numeric: tabular-nums; color: #CFE3F5 !important; }
+.ent-tema-cabeza .ver-ctx { color: var(--laton-claro); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -1041,8 +1062,9 @@ body.enfoque .ent-leyenda { display: none; }
           <div class="ent-cabeza">
             <span class="ent-avatar" aria-hidden="true">🎓</span>
             <h2 id="ent-titulo">Entrenador</h2>
-            <span class="ent-apertura oculto" id="ent-apertura"></span>
+            <button type="button" class="ent-apertura oculto" id="ent-apertura" aria-expanded="false" aria-controls="ent-contexto" title="¿Qué es esta apertura?"></button>
           </div>
+          <div id="ent-contexto" class="ent-contexto oculto"></div>
           <div id="ent-tema" class="ent-tema oculto"></div>
           <div id="ent-tarjeta" class="ent-tarjeta"></div>
           <div id="ent-amenaza" class="ent-amenaza oculto"></div>

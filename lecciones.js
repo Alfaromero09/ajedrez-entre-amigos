@@ -150,3 +150,71 @@ export const TEMAS = [
     linea: "e4 e5 Bc4 Nc6 Qh5 Nf6 Qxf7#",
     plan: [["e4", "peón de rey"], ["Bc4", "alfil a c4 contra f7"], ["Qh5", "la dama también apunta a f7"], ["Qxf7#", "¡mate en f7!"]] },
 ];
+
+// Contexto de cada tema: qué es, para qué sirve y un poco de historia
+export const CONTEXTO = {
+  italiana: {
+    paraQue: "Desarrollar rápido, enrocar pronto y presionar f7, el punto más débil de las negras. Es ideal para aprender los principios de la apertura.",
+    historia: "Es de las aperturas más antiguas: ya la analizaban maestros italianos en los siglos XVI y XVII, como Polerio y Gioachino Greco. Su variante «Giuoco Piano» significa «juego tranquilo». Durante años se vio como apertura de principiantes, pero en la última década volvió a la élite con jugadores como Carlsen y Caruana.",
+  },
+  espanola: {
+    paraQue: "Ejercer una presión lenta y duradera sobre el centro negro atacando al caballo que defiende e5. Premia la paciencia y el juego por maniobras.",
+    historia: "Se llama así por Ruy López de Segura, un sacerdote español que la estudió en un libro de 1561. Es una de las aperturas más jugadas en la historia de los campeonatos mundiales; Fischer, Kaspárov y Carlsen la usaron muchísimo.",
+  },
+  "gambito-dama": {
+    paraQue: "Usar el peón de c4 para desviar al peón de d5 y quedarse con un centro fuerte. Lleva a posiciones clásicas donde gana quien entiende mejor los planes.",
+    historia: "Aparece ya en un manuscrito de finales del siglo XV. Fue la apertura reina de los campeonatos mundiales del siglo XX: en el match Capablanca–Alekhine de 1927 se jugó en casi todas las partidas. La serie «Gambito de dama» (2020) tomó de ella su nombre.",
+  },
+  londres: {
+    paraQue: "Tener un esquema sólido que se juega casi igual contra todo: d4, Af4, e3, Cf3, c3, Ad3 y enroque. Evita estudiar mucha teoría y lleva a posiciones cómodas.",
+    historia: "Toma su nombre del torneo de Londres de 1922, donde la usaron varios maestros. Por décadas se consideró algo aburrida, pero desde 2010 se puso de moda en todos los niveles, incluso entre campeones como Carlsen.",
+  },
+  siciliana: {
+    paraQue: "Desequilibrar la partida: las negras cambian su peón c por el peón central d de las blancas y buscan contraataque. Es la mejor arma para jugar a ganar con negras.",
+    historia: "Ya la analizaba Polerio a finales del siglo XVI, pero se volvió la defensa más popular del siglo XX. Fue el arma principal de Fischer y Kaspárov. La variante Najdorf lleva el nombre de Miguel Najdorf, gran maestro polaco-argentino.",
+  },
+  dragon: {
+    paraQue: "Colocar el alfil en g7, donde barre la gran diagonal. Suele llevar a partidas muy agudas con enroques en lados opuestos y ataques mutuos.",
+    historia: "Se le llamó «Dragón» a principios del siglo XX porque la cadena de peones negros recuerda la forma de la constelación del Dragón. Es famosa por sus líneas afiladas, donde un solo tiempo decide la partida.",
+  },
+  francesa: {
+    paraQue: "Construir una defensa sólida con e6 y d5 y luego atacar la cadena de peones blanca con c5 y f6. Su punto débil es el alfil de c8, que queda encerrado.",
+    historia: "Recibió su nombre tras una partida por correspondencia entre Londres y París en 1834, en la que el equipo de París la usó con éxito. Grandes campeones como Botvinnik y Korchnói la jugaron toda su vida.",
+  },
+  "caro-kann": {
+    paraQue: "Defenderse con solidez: c6 prepara d5 sin encerrar al alfil de c8, que sale a f5 o g4. Lleva a posiciones seguras con pocas debilidades.",
+    historia: "Lleva el nombre de Horatio Caro y Marcus Kann, que la analizaron a fines del siglo XIX. Capablanca, Botvinnik y Kárpov confiaron en ella en partidas de máxima importancia.",
+  },
+  escandinava: {
+    paraQue: "Atacar el peón de e4 desde la primera jugada y forzar el juego desde el inicio. La dama sale pronto, por eso hay que cuidarla de los ataques.",
+    historia: "Es de las aperturas registradas más antiguas: aparece en una partida jugada en Valencia en el siglo XV. Su nombre viene de analistas escandinavos del siglo XIX. Anand llegó a usarla en un Campeonato Mundial (1995).",
+  },
+  "india-rey": {
+    paraQue: "Dejar que las blancas construyan un gran centro para atacarlo después con e5 o c5. Es una defensa de contraataque, para quienes disfrutan las posiciones complejas.",
+    historia: "La desarrollaron con fuerza los maestros soviéticos a mediados del siglo XX. Fue una de las armas favoritas de Fischer y Kaspárov con negras contra d4.",
+  },
+  eslava: {
+    paraQue: "Sostener d5 con c6 sin encerrar al alfil de casillas blancas. Es sólida pero activa, un equilibrio difícil de lograr con negras.",
+    historia: "Su nombre viene de varios maestros eslavos que la desarrollaron a principios del siglo XX. Fue protagonista en los matches por el título entre Alekhine y Euwe en la década de 1930.",
+  },
+  "gambito-rey": {
+    paraQue: "Sacrificar el peón de f4 para abrir la columna f y lanzarse al ataque contra el rey negro. Enseña a valorar la iniciativa por encima del material.",
+    historia: "Fue la apertura del ajedrez romántico del siglo XIX. La «Partida Inmortal» (Anderssen–Kieseritzky, Londres 1851) empezó con este gambito. Fischer escribió en 1961 un famoso artículo intentando refutarlo, y aun así lo jugó alguna vez.",
+  },
+  evans: {
+    paraQue: "Dar un peón con b4 para ganar tiempo, jugar c3 y d4, y atacar con piezas más activas. Es la forma más agresiva de jugar la Italiana.",
+    historia: "La inventó el capitán galés William Evans hacia 1827. La «Siempreviva» de Anderssen (1852) fue un Gambito Evans, y Kaspárov la revivió en 1995 para ganarle a Anand.",
+  },
+  budapest: {
+    paraQue: "Sorprender a las blancas con e5 desde la segunda jugada, ofreciendo un peón para obtener un juego activo y rápido de piezas.",
+    historia: "La desarrollaron jugadores húngaros a principios del siglo XX y se popularizó tras un torneo en Budapest. Es una apertura de sorpresa: muy útil contra rivales que no la conocen.",
+  },
+  "higado-frito": {
+    paraQue: "Atacar f7 con caballo y alfil y sacrificar el caballo para sacar al rey negro al centro. Enseña a atacar al rey cuando no ha enrocado.",
+    historia: "El sacrificio ya aparece en análisis de Polerio en el siglo XVI. Su curioso nombre viene del italiano «fegatello», un platillo de hígado: la idea es que el rey negro queda «frito».",
+  },
+  pastor: {
+    paraQue: "Dar mate en f7 en cuatro jugadas si el rival se descuida. Más que jugarla, sirve para aprender a defenderse de ella (con Cf6, g6 o De7 a tiempo).",
+    historia: "Es la trampa más famosa del ajedrez y la primera que muchos aprenden. Contra un rival atento no funciona y deja a la dama expuesta, por eso los maestros no la juegan.",
+  },
+};

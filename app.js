@@ -3,7 +3,7 @@ import { Chess } from "https://esm.sh/chess.js@1.4.0";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 import { piezaSVG, iconoSVG } from "./piezas.js";
 import { TABLEROS, PIEZAS, DEFS_3D, pieza as dibujoPieza } from "./estilos.js";
-import { APERTURAS, LECCIONES, TEMAS } from "./lecciones.js";
+import { APERTURAS, LECCIONES, TEMAS, CONTEXTO } from "./lecciones.js";
 
 const $ = (id) => document.getElementById(id);
 const COLUMNAS = "abcdefgh";
@@ -1210,6 +1210,8 @@ function empezarLocal(cfg) {
   motor?.postMessage("ucinewgame");
   history.pushState(null, "", `?p=${MAQUINA}`);
   abrirLocal(true);
+  cerrarContexto();
+  if (leccion) setTimeout(() => abrirContexto({ nombre: leccion.nombre, temaId: TEMAS.some((t) => t.id === leccion.id) ? leccion.id : null }), 50);
   if (leccion) tarjeta("", `<span class="ent-paso">LECCIÓN · ${esc(leccion.nivel.toUpperCase())}</span><span class="ent-veredicto">${esc(leccion.nombre)}</span><p>${esc(leccion.intro)}</p><p>Tú mueves tus piezas: la <strong style="color:#9DC3E6">flecha azul</strong> te dice qué jugada toca y por qué, pero puedes jugar lo que quieras. La Máquina responde con la línea de la lección.</p>`);
   else if (partida.didactico) tarjeta("", `<span class="ent-veredicto">🎓 Entrenador listo</span><p>Juega con calma: después de cada jugada te digo si fue buena o no, con flechas. Si te equivocas, puedes <strong>deshacer</strong>.</p>`);
 }
@@ -1448,6 +1450,45 @@ function tarjeta(clase, html, tipo = "") {
   t.dataset.tipo = tipo;
   t.innerHTML = html;
 }
+// ---------- Contexto: qué es, para qué sirve y algo de historia ----------
+const CLAVES_CONTEXTO = [
+  [/Dragón/, "dragon"], [/Siciliana/, "siciliana"], [/Evans/, "evans"], [/Gambito de Rey/, "gambito-rey"], [/Budapest/, "budapest"],
+  [/Gambito de Dama/, "gambito-dama"], [/Eslava/, "eslava"], [/Londres/, "londres"], [/Española/, "espanola"],
+  [/Italiana|Giuoco|dos caballos/i, "italiana"], [/Francesa/, "francesa"], [/Caro-Kann/, "caro-kann"], [/Escandinava/, "escandinava"],
+  [/India de Rey/, "india-rey"],
+];
+let contextoAbierto = null;
+function abrirContexto({ nombre, tipo, explica, idea, temaId }) {
+  const id = temaId || (CLAVES_CONTEXTO.find(([r]) => r.test(nombre)) || [])[1];
+  const ctx = id ? CONTEXTO[id] : null;
+  const tema = id ? TEMAS.find((t) => t.id === id) : null;
+  const linea = tema ? tema.linea.split(" ").map((m, i) => (i % 2 === 0 ? `${i / 2 + 1}. ` : "") + sanEs(m)).join(" ") : "";
+  const t = tipo || (tema ? tipoApertura(tema.nombre).tipo : "");
+  const exp = explica || (tema ? tipoApertura(tema.nombre).explica : "");
+  $("ent-contexto").innerHTML = `<div class="ctx-cabeza"><h3>${esc(nombre)}</h3><button type="button" id="ctx-cerrar" aria-label="Cerrar">×</button></div>` +
+    (t ? `<span class="ctx-tipo">${esc(t.toUpperCase())}</span><p>Un <strong>${esc(t.toLowerCase())}</strong> es ${esc(exp)}.</p>` : "") +
+    (idea ? `<h4>La idea</h4><p>${esc(idea)}</p>` : "") +
+    (ctx ? `<h4>Para qué sirve</h4><p>${esc(ctx.paraQue)}</p><h4>Un poco de historia</h4><p>${esc(ctx.historia)}</p>` : "") +
+    (linea ? `<h4>Línea principal</h4><p class="ctx-linea">${esc(linea)}</p>` : "");
+  $("ent-contexto").classList.remove("oculto");
+  $("ent-apertura").setAttribute("aria-expanded", "true");
+  contextoAbierto = nombre;
+}
+function cerrarContexto() {
+  $("ent-contexto").classList.add("oculto");
+  $("ent-apertura").setAttribute("aria-expanded", "false");
+  contextoAbierto = null;
+}
+$("ent-apertura").addEventListener("click", () => {
+  if (contextoAbierto) return cerrarContexto();
+  const a = apertura(partida.jugadas);
+  if (a) abrirContexto(a);
+});
+document.addEventListener("click", (e) => {
+  if (e.target.id === "ctx-cerrar") cerrarContexto();
+  const v = e.target.closest("[data-ver-contexto]");
+  if (v) { const t = TEMAS.find((x) => x.id === v.dataset.verContexto); if (t) abrirContexto({ nombre: t.nombre, temaId: t.id, idea: (APERTURAS.find(([n]) => n === t.nombre) || [])[2] }); }
+});
 function pintarApertura() {
   const a = apertura(partida.jugadas);
   const chip = $("ent-apertura");
@@ -1457,6 +1498,7 @@ function pintarApertura() {
   chip.title = `${a.tipo}: ${a.explica}`;
   const nueva = a.nombre !== ultimaApertura;
   ultimaApertura = a.nombre;
+  if (nueva && contextoAbierto && !TEMAS.some((t) => t.nombre === contextoAbierto)) abrirContexto(a);
   return nueva ? a : null;
 }
 
@@ -1733,7 +1775,7 @@ function pintarTema() {
   caja.classList.toggle("oculto", !t);
   guiaActual = null;
   if (!t) return;
-  const cabeza = `<div class="ent-tema-cabeza"><span>🎯 PRACTICANDO: ${esc(t.nombre.toUpperCase())}${t.tipo ? ` · ${esc(t.tipo.toUpperCase())}` : ""}</span><button type="button" id="tema-quitar">Quitar</button></div>`;
+  const cabeza = `<div class="ent-tema-cabeza"><span>🎯 PRACTICANDO: ${esc(t.nombre.toUpperCase())}${t.tipo ? ` · ${esc(t.tipo.toUpperCase())}` : ""}</span><span><button type="button" class="ver-ctx" data-ver-contexto="${t.id}">📜 ¿Qué es?</button> · <button type="button" id="tema-quitar">Quitar</button></span></div>`;
   if (t.color !== miColor()) {
     caja.innerHTML = cabeza + `<p>Este tema se juega con <strong>${t.color === "w" ? "blancas" : "negras"}</strong> y en esta partida llevas ${miColor() === "w" ? "blancas" : "negras"}.</p><button type="button" class="btn-fila dorado" id="tema-nueva">Empezar partida con este tema</button>`;
     return;
@@ -1778,6 +1820,7 @@ $("ent-lista-temas").addEventListener("click", (e) => {
   pintarTema();
   pintarFlechas();
   avisar(`🎯 Practicando: ${temaActivo().nombre}`);
+  abrirContexto({ nombre: temaActivo().nombre, temaId: temaActivo().id });
 });
 
 // ---------- Repasar jugadas (adelante y atrás) ----------
@@ -2370,6 +2413,19 @@ function dibujar() {
   revisarVideo();
   if (partida.local) ajustarVistaLocal(color, turno);
   if (mesaPartidaDe && mesaPartidaDe !== `${partida.id}:${partida.estado}`) pintarMesaPartida();
+
+  // Coordenadas por fuera del tablero (letras abajo, números a la izquierda), según tu lado
+  const coords = document.createElement("div");
+  coords.className = "coords";
+  coords.setAttribute("aria-hidden", "true");
+  let htmlC = "";
+  for (let i = 0; i < 8; i++) {
+    const letra = COLUMNAS[volteado ? 7 - i : i];
+    const numero = volteado ? i + 1 : 8 - i;
+    htmlC += `<span class="crd-l" style="left:${(i + 0.5) * 12.5}%">${letra}</span><span class="crd-n" style="top:${(i + 0.5) * 12.5}%">${numero}</span>`;
+  }
+  coords.innerHTML = htmlC;
+  tablero.appendChild(coords);
 
   const lista = $("jugadas");
   lista.innerHTML = "";
