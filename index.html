@@ -847,6 +847,23 @@ body.enfoque.plan-aparte .lateral-plan { display: flex; flex-direction: column; 
 body.enfoque .ent-contexto { max-height: 190px; overflow-y: auto; }
 body.enfoque .lateral { max-height: calc(100vh - 16px); overflow-y: auto; }
 .plan-resumen { font-size: 13px; color: #A9CB9A; }
+
+/* ---------- Notas y preguntas al entrenador ---------- */
+.ent-notas { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: #1F150E; border: 1px solid var(--linea); }
+.ent-notas h3 { margin: 0; font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--suave); }
+.ent-notas ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.ent-notas li { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.45; color: #E2D3B8; }
+.ent-notas li i { width: 10px; height: 10px; border-radius: 3px; transform: translateY(1px); }
+.ent-notas li strong { color: var(--texto); }
+.ent-preguntas { display: flex; flex-direction: column; gap: 6px; }
+.ent-preg-titulo { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #9DC3E6; }
+.ent-preg-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.ent-preg-chips button { padding: 5px 10px; border-radius: 999px; border: 1px solid rgba(111,168,220,0.45); background: rgba(111,168,220,0.10); color: #CFE3F5; font-size: 12px; }
+.ent-preg-chips button:hover { background: rgba(111,168,220,0.22); transform: none; }
+.ent-preg-chips button:disabled { opacity: 0.5; cursor: default; }
+.l-morado { background: #B47CF0; }
+.ent-tarjeta.respuesta { border-left-color: #B47CF0; }
+body.enfoque .ent-preguntas { display: flex; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -1077,10 +1094,22 @@ body.enfoque .lateral { max-height: calc(100vh - 16px); overflow-y: auto; }
           <div id="ent-tema" class="ent-tema oculto"></div>
           <div id="ent-tarjeta" class="ent-tarjeta"></div>
           <div id="ent-amenaza" class="ent-amenaza oculto"></div>
+          <div id="ent-notas" class="ent-notas oculto"></div>
           <div class="ent-botones">
             <button type="button" class="ent-btn" id="ent-pistas" aria-pressed="false">💡 Ver mejores jugadas</button>
             <button type="button" class="ent-btn" id="ent-deshacer">↶ Deshacer</button>
             <button type="button" class="ent-btn ancho" id="ent-temas" aria-expanded="false">📋 Practicar un tema</button>
+          </div>
+          <div class="ent-preguntas">
+            <span class="ent-preg-titulo">🙋 Pregúntale al entrenador</span>
+            <div class="ent-preg-chips">
+              <button type="button" data-pregunta="mate">¿Puedo dar mate?</button>
+              <button type="button" data-pregunta="tactica">¿Hay una táctica?</button>
+              <button type="button" data-pregunta="amenaza">¿Qué me amenaza?</button>
+              <button type="button" data-pregunta="ataque">¿Cómo ataco?</button>
+              <button type="button" data-pregunta="defensa">¿Cómo me defiendo?</button>
+              <button type="button" data-pregunta="guia">Dame una guía desde aquí</button>
+            </div>
           </div>
           <div id="ent-lista-temas" class="ent-lista-temas oculto"></div>
           <div class="ent-repaso" aria-label="Repasar jugadas">
@@ -1092,7 +1121,7 @@ body.enfoque .lateral { max-height: calc(100vh - 16px); overflow-y: auto; }
           </div>
           <button type="button" class="ent-btn jugar-aqui oculto" id="rep-jugar">▶ Jugar desde aquí</button>
           <div id="ent-plan" class="ent-plan"></div>
-          <div class="ent-leyenda"><span><i class="l-verde"></i>Mejor</span><span><i class="l-amarillo"></i>Buena opción</span><span><i class="l-rojo"></i>Tu error</span><span><i class="l-naranja"></i>Amenaza</span><span><i class="l-azul"></i>Lección</span></div>
+          <div class="ent-leyenda"><span><i class="l-verde"></i>Mejor</span><span><i class="l-amarillo"></i>Buena opción</span><span><i class="l-rojo"></i>Tu error</span><span><i class="l-naranja"></i>Amenaza</span><span><i class="l-azul"></i>Plan / lección</span><span><i class="l-morado"></i>Táctica / mate</span></div>
         </section>
         <div id="video" class="video oculto" aria-label="Cámaras">
           <div class="video-rival">

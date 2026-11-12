@@ -316,6 +316,10 @@ $("tiempos").addEventListener("click", (e) => {
 // Al regresar a la pestaña (o al volver el internet) se pone al día solo
 async function ponerseAlDia() {
   if (!yo || !sb) return;
+  if (partida?.local && !$("partida").classList.contains("oculto")) {
+    if (!pensandoMaquina && !ocupadoEntrenador && await bajarMaquina()) abrirLocal(false);
+    return;
+  }
   if (partida && !$("partida").classList.contains("oculto")) {
     const fresca = await recargar(partida.id);
     if (fresca && fresca.version >= partida.version) { partida = fresca; dibujar(); }
@@ -367,6 +371,7 @@ function irAPartida(id) {
 
 async function cargarClub() {
   if (!yo) return;
+  await bajarMaquina().catch(() => false);
   const desde = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const hace7 = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
   const [salasR, vivoR, mesaR, claveR, mioR, recientesR, canceladasR] = await Promise.all([
@@ -1134,7 +1139,46 @@ const valorDe = (l) => (l.mate != null ? (l.mate > 0 ? 10000 - l.mate * 10 : -10
 
 const configLocal = () => { try { return JSON.parse(LS?.getItem("ajedrez-maquina-config") || "null") || { nivel: "medio", color: "w", min: 0 }; } catch { return { nivel: "medio", color: "w", min: 0 }; } };
 const partidaLocalGuardada = () => { try { return JSON.parse(LS?.getItem("ajedrez-maquina") || "null"); } catch { return null; } };
-const guardarLocal = () => { try { LS?.setItem("ajedrez-maquina", JSON.stringify({ ...partida, optimista: false })); } catch {} };
+const guardarLocal = () => {
+  try {
+    LS?.setItem("ajedrez-maquina", JSON.stringify({ ...partida, optimista: false }));
+    LS?.setItem("ajedrez-maquina-t", new Date().toISOString());
+  } catch {}
+  subirMaquina();
+};
+
+// ---------- Sincronizar con la nube: la misma partida en tu celular y en tu laptop ----------
+let tSubida = null;
+function marcarCambioLocal() { try { LS?.setItem("ajedrez-maquina-t", new Date().toISOString()); } catch {} subirMaquina(); }
+function subirMaquina() {
+  clearTimeout(tSubida);
+  tSubida = setTimeout(async () => {
+    if (!yo || !sb) return;
+    const t = LS?.getItem("ajedrez-maquina-t") || new Date().toISOString();
+    try {
+      await sb.from("maquina_estado").upsert({
+        usuario: yo, partida: partidaLocalGuardada(), record: recordLocal(), config: configLocal(), actualizada: t,
+      });
+    } catch {}
+  }, 1200);
+}
+// Trae de la nube lo más reciente (si otro dispositivo jugó después)
+async function bajarMaquina() {
+  if (!yo || !sb) return false;
+  let data, error;
+  try { ({ data, error } = await sb.from("maquina_estado").select("partida, record, config, actualizada").eq("usuario", yo).maybeSingle()); }
+  catch { return false; }
+  if (error || !data) return false;
+  const local = LS?.getItem("ajedrez-maquina-t");
+  if (local && new Date(local) >= new Date(data.actualizada)) return false;
+  try {
+    if (data.partida) LS?.setItem("ajedrez-maquina", JSON.stringify(data.partida)); else LS?.removeItem("ajedrez-maquina");
+    if (data.record) LS?.setItem("ajedrez-maquina-record", JSON.stringify(data.record));
+    if (data.config) LS?.setItem("ajedrez-maquina-config", JSON.stringify(data.config));
+    LS?.setItem("ajedrez-maquina-t", data.actualizada);
+  } catch {}
+  return true;
+}
 const recordLocal = () => { try { return JSON.parse(LS?.getItem("ajedrez-maquina-record") || "{}"); } catch { return {}; } };
 
 function pintarLeccionesModal(elegida) {
@@ -1185,6 +1229,7 @@ $("vsm-empezar").addEventListener("click", () => {
   const cfg = { nivel: elegido("vsm-nivel", "nivel") || "medio", color: elegido("vsm-color", "color") || "w", min: Number(elegido("vsm-tiempo", "min") || 0),
     modo, leccion, didactico: modo === "leccion" || $("vsm-entrenador").checked };
   LS?.setItem("ajedrez-maquina-config", JSON.stringify(cfg));
+  marcarCambioLocal();
   $("vs-maquina").classList.add("oculto");
   empezarLocal(cfg);
 });
@@ -1216,8 +1261,9 @@ function empezarLocal(cfg) {
   else if (partida.didactico) tarjeta("", `<span class="ent-veredicto">🎓 Entrenador listo</span><p>Juega con calma: después de cada jugada te digo si fue buena o no, con flechas. Si te equivocas, puedes <strong>deshacer</strong>.</p>`);
 }
 
-function abrirLocal(recien) {
+async function abrirLocal(recien) {
   mostrar("partida");
+  if (!recien) await bajarMaquina();
   const g = recien ? partida : partidaLocalGuardada();
   if (!g || (g.blancas !== yo && g.negras !== yo)) {
     avisar("No tienes una partida contra la Máquina. Empieza una nueva.");
@@ -1328,6 +1374,29 @@ function jugadaSencilla(fen) {
     if (v > mejorValor) { mejorValor = v; mejor = m; }
   }
   return mejor ? mejor.from + mejor.to + (mejor.promotion || "") : null;
+}
+// Mejores jugadas sin motor (respaldo): ordena por capturas, jaques, desarrollo y seguridad
+function jugadasHeuristicas(fen, n = 3) {
+  const c = new Chess(fen);
+  const lista = [];
+  for (const m of c.moves({ verbose: true })) {
+    c.move(m);
+    let v = 0;
+    if (c.isCheckmate()) v = 1e6;
+    else {
+      if (m.captured) v += VALOR_PIEZA[m.captured] * 100;
+      if (m.promotion) v += 800;
+      if (c.inCheck()) v += 40;
+      try { if (c.attackers(m.to, c.turn()).length && !c.attackers(m.to, m.color).length) v -= VALOR_PIEZA[m.piece] * 100; } catch {}
+      const atras = (m.color === "w" && m.from[1] === "1") || (m.color === "b" && m.from[1] === "8");
+      if ((m.piece === "n" || m.piece === "b") && atras) v += 30;
+      if (m.flags.includes("k") || m.flags.includes("q")) v += 45;
+      if (["d4", "e4", "d5", "e5"].includes(m.to)) v += 20;
+    }
+    c.undo();
+    lista.push({ uci: m.from + m.to + (m.promotion || ""), valor: v, heuristica: true });
+  }
+  return lista.sort((a, b) => b.valor - a.valor).slice(0, n);
 }
 // Piezas atacadas y sin defensa de un color
 function piezasColgadas(fen, color) {
@@ -1506,15 +1575,21 @@ function pintarApertura() {
 async function entrenadorTuTurno() {
   if (!partida?.didactico || partida.estado !== "jugando") return;
   const fen = partida.fen;
-  const lineas = await analizar(fen, 3, 700).catch(() => null);
-  if (!lineas || partida.fen !== fen) return null;
+  let lineas = await analizar(fen, 3, 700).catch(() => null);
+  if (partida.fen !== fen) return null;
+  if (!lineas || !lineas.length) lineas = jugadasHeuristicas(fen, 3);
   analisisTurno = { fen, lineas };
   if (pistasVisibles) mostrarPistas();
   pintarPlan();
+  pintarNotas();
   return lineas;
 }
 function mostrarPistas() {
-  if (!analisisTurno || analisisTurno.fen !== partida.fen) return;
+  if (partida.estado !== "jugando" || new Chess(partida.fen).turn() !== miColor()) return;
+  if (!analisisTurno || analisisTurno.fen !== partida.fen) {
+    if (!motorFallo) return;
+    analisisTurno = { fen: partida.fen, lineas: jugadasHeuristicas(partida.fen, 3) };
+  }
   const [a, ...resto] = analisisTurno.lineas;
   flechas = flechas.filter((f) => f.color === "naranja");
   if (a) flechas.push({ de: a.uci.slice(0, 2), a: a.uci.slice(2, 4), color: "verde" });
@@ -1885,8 +1960,134 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight") { e.preventDefault(); irA((vistaIndice ?? partida.jugadas.length) + 1); }
 });
 
+// ---------- NOTAS: qué logra cada jugada candidata ----------
+function columnaAbierta(c, col, color) {
+  const peones = c.board().flat().filter((p) => p && p.type === "p" && p.square[0] === col);
+  if (!peones.length) return "abierta";
+  if (!peones.some((p) => p.color === color)) return "semiabierta";
+  return "";
+}
+function notaDeJugada(fen, uci) {
+  const c = new Chess(fen);
+  let m; try { m = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" }); } catch { return null; }
+  const nombre = NOMBRE_PIEZA[m.piece];
+  const tipos = tiposJugada(fen, uci);
+  const partes = tipos.filter((t) => t.tipo !== "Maniobra").map((t) => t.texto);
+  if (m.piece === "r" && !m.captured) {
+    const col = columnaAbierta(new Chess(c.fen()), m.to[0], m.color);
+    if (col) partes.push(`la torre toma una columna ${col}: más fuerza ofensiva`);
+  }
+  if (m.piece === "q" && Math.ceil(partida.jugadas.length / 2) < 6 && !m.captured) partes.push("aunque sacar la dama tan pronto la expone");
+  const ofensiva = tipos.some((t) => ["Ataque", "Ataque al rey", "Captura"].includes(t.tipo));
+  const defensiva = tipos.some((t) => t.tipo === "Defensa" || t.tipo === "Enroque");
+  return {
+    texto: `Si mueves ${m.piece === "p" ? "el peón" : `${nombre === "dama" || nombre === "torre" ? "la" : "el"} ${nombre}`} a <strong>${m.to}</strong> (${esc(sanEs(m.san))}): ${esc(partes.join(", ") || "mejoras su posición")}.`,
+    estilo: ofensiva ? "ofensiva" : defensiva ? "defensiva" : "neutra",
+  };
+}
+function pintarNotas() {
+  const caja = $("ent-notas");
+  const miTurno = partida?.didactico && partida.estado === "jugando" && vistaIndice === null && new Chess(partida.fen).turn() === miColor();
+  if (!miTurno || !analisisTurno || analisisTurno.fen !== partida.fen) { caja.classList.add("oculto"); return; }
+  const colores = ["verde", "amarillo", "amarillo"];
+  const items = analisisTurno.lineas.slice(0, 3).map((l, i) => ({ n: notaDeJugada(partida.fen, l.uci), color: colores[i] })).filter((x) => x.n);
+  // También la jugada del plan, si hay
+  if (guiaActual?.m && !items.some((x) => x.n.texto.includes(`(${sanEs(guiaActual.m.san)})`))) {
+    const n = notaDeJugada(partida.fen, guiaActual.m.from + guiaActual.m.to);
+    if (n) items.push({ n, color: "azul" });
+  }
+  if (!items.length) { caja.classList.add("oculto"); return; }
+  caja.innerHTML = `<h3>📝 Notas para esta jugada</h3><ul>` +
+    items.map((x) => `<li><i style="background:${COLOR_FLECHA[x.color]}"></i><span>${x.n.texto}${x.n.estilo === "ofensiva" ? " ⚔️" : x.n.estilo === "defensiva" ? " 🛡️" : ""}</span></li>`).join("") +
+    `</ul>`;
+  caja.classList.remove("oculto");
+}
+
+// ---------- Pregúntale al entrenador ----------
+async function responderPregunta(pregunta) {
+  if (!partida?.local || partida.estado !== "jugando") return avisar("Pregúntame durante una partida en juego.");
+  if (vistaIndice !== null) irA(null);
+  const botones = document.querySelectorAll("[data-pregunta]");
+  botones.forEach((b) => (b.disabled = true));
+  const fen = partida.fen;
+  const miTurno = new Chess(fen).turn() === miColor();
+  tarjeta("respuesta", `<span class="ent-veredicto">🙋 Pensando tu pregunta<span class="analizando"><i></i><i></i><i></i></span></span>`, "respuesta");
+  try {
+    if (pregunta === "amenaza") {
+      flechas = [];
+      await buscarAmenaza(analisisTurno?.fen === fen ? analisisTurno.lineas[0]?.valor ?? 0 : 0);
+      const hay = !$("ent-amenaza").classList.contains("oculto");
+      tarjeta("respuesta", `<span class="ent-veredicto">🙋 ¿Qué me amenaza?</span><p>${hay ? "Mira el aviso naranja y la flecha naranja en el tablero: eso es lo que la Máquina quiere hacer." : "Ahora mismo no veo amenazas serias contra ti. Buen momento para mejorar tus piezas o atacar."}</p>`, "respuesta");
+      return;
+    }
+    if (!miTurno) return tarjeta("respuesta", "<p>Espera a que sea tu turno y vuelve a preguntarme.</p>", "respuesta");
+    const lineas = (await analizar(fen, 5, pregunta === "mate" || pregunta === "tactica" ? 1500 : 900).catch(() => null)) || jugadasHeuristicas(fen, 5);
+    if (partida.fen !== fen) return;
+    analisisTurno = { fen, lineas: lineas.slice(0, 3) };
+    const san = (l) => esc(sanEs(uciASan(fen, l.uci)?.san || l.uci));
+    const flecha = (l, color) => ({ de: l.uci.slice(0, 2), a: l.uci.slice(2, 4), color });
+    flechas = [];
+    let html = "";
+    if (pregunta === "mate") {
+      const mate = lineas.find((l) => l.mate > 0);
+      if (mate) {
+        flechas.push(flecha(mate, "morado"));
+        // La secuencia de mate: tus jugadas en morado, las del rival en naranja
+        const pasos = mate.pv.slice(0, Math.min(mate.pv.length, mate.mate * 2 - 1));
+        let c = new Chess(fen); const sans = [];
+        pasos.forEach((u, i) => { try { const m = c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] || "q" }); sans.push(sanEs(m.san)); if (i > 0 && i < 4) flechas.push({ de: u.slice(0, 2), a: u.slice(2, 4), color: i % 2 ? "naranja" : "morado" }); } catch {} });
+        html = `<span class="ent-veredicto">🙋 ¿Puedo dar mate?</span><p><strong style="color:#D6B4FA">¡Sí! Hay mate en ${mate.mate}.</strong> Empieza con <strong>${san(mate)}</strong> (flecha morada).</p><p>La secuencia: ${esc(sans.join(" · "))}.</p>`;
+      } else {
+        flechas.push(flecha(lineas[0], "verde"));
+        html = `<span class="ent-veredicto">🙋 ¿Puedo dar mate?</span><p>Por ahora <strong>no hay mate forzado</strong>. La mejor jugada es <strong>${san(lineas[0])}</strong> (flecha verde): ${esc(porQueJugada(fen, lineas[0].uci))}. Para preparar un ataque al rey, acerca más piezas a su enroque.</p>`;
+      }
+    } else if (pregunta === "tactica") {
+      const [a, b] = lineas;
+      const salto = b ? a.valor - b.valor : 0;
+      const m = uciASan(fen, a.uci);
+      if (a.mate > 0 || salto >= 150 || m?.captured) {
+        flechas.push(flecha(a, "morado"));
+        html = `<span class="ent-veredicto">🙋 ¿Hay una táctica?</span><p><strong style="color:#D6B4FA">Sí.</strong> Busca <strong>${san(a)}</strong> (flecha morada): ${esc(porQueJugada(fen, a.uci))}.${salto >= 150 ? ` Es mucho mejor que las demás opciones (unos ${(salto / 100).toFixed(1)} peones).` : ""}</p>${chipsTipo(fen, a.uci)}`;
+      } else {
+        lineas.slice(0, 2).forEach((l, i) => flechas.push(flecha(l, i ? "amarillo" : "verde")));
+        html = `<span class="ent-veredicto">🙋 ¿Hay una táctica?</span><p>No veo una táctica clara: las mejores jugadas valen casi lo mismo. Aquí gana quien tenga <strong>mejor plan</strong>. Te marco las dos mejores ideas.</p>`;
+      }
+    } else if (pregunta === "ataque" || pregunta === "defensa") {
+      const buscados = pregunta === "ataque" ? ["Ataque", "Ataque al rey", "Captura"] : ["Defensa", "Enroque"];
+      const elegidas = lineas.filter((l) => tiposJugada(fen, l.uci).some((t) => buscados.includes(t.tipo))).slice(0, 2);
+      const usar = elegidas.length ? elegidas : lineas.slice(0, 1);
+      usar.forEach((l, i) => flechas.push(flecha(l, i ? "amarillo" : "verde")));
+      html = `<span class="ent-veredicto">🙋 ${pregunta === "ataque" ? "¿Cómo ataco?" : "¿Cómo me defiendo?"}</span>` +
+        (elegidas.length ? "" : `<p>No hay una jugada claramente ${pregunta === "ataque" ? "ofensiva" : "defensiva"} entre las buenas; lo más sano es esto:</p>`) +
+        usar.map((l) => `<p><strong>${san(l)}</strong>: ${esc(porQueJugada(fen, l.uci))}.</p>${chipsTipo(fen, l.uci)}`).join("") +
+        (pregunta === "ataque" ? "<p>Idea general: lleva piezas hacia el rey rival, abre líneas con peones y busca columnas abiertas para tus torres.</p>" : "<p>Idea general: protege las piezas sueltas, mantén peones frente a tu rey y cambia las piezas más activas del rival.</p>");
+    } else {
+      // Una guía nueva desde la posición actual
+      lineas.slice(0, 3).forEach((l, i) => flechas.push(flecha(l, i ? "amarillo" : "verde")));
+      const sug = temasSugeridos().slice(0, 1)[0];
+      html = `<span class="ent-veredicto">🙋 Tu guía desde aquí</span>` + textoFase(lineas[0].valor) +
+        `<p>Mi recomendación: <strong>${san(lineas[0])}</strong> (verde), ${esc(porQueJugada(fen, lineas[0].uci))}. Alternativas en amarillo.</p>` +
+        (sug ? `<p>Plan que mejor encaja con tu posición: <button type="button" class="enlace-boton" data-cambiar-tema="${sug.t.id}">${esc(sug.t.nombre)}</button>.</p>` : "");
+    }
+    tarjeta("respuesta", html, "respuesta");
+    pintarFlechas();
+    pintarNotas();
+  } catch (e) {
+    console.warn("Pregunta:", e);
+    tarjeta("respuesta", "<p>No pude responder ahora. Intenta de nuevo en un momento.</p>", "respuesta");
+  } finally {
+    botones.forEach((b) => (b.disabled = false));
+  }
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pregunta]");
+  if (b) responderPregunta(b.dataset.pregunta);
+  const c = e.target.closest(".ent-tarjeta [data-cambiar-tema]");
+  if (c && partida?.local) { partida.tema = c.dataset.cambiarTema; guardarLocal(); pintarEntrenador(); avisar(`🔄 Cambiamos de plan: ${temaActivo().nombre}`); }
+});
+
 // Dibuja las flechas sobre el tablero (respetan la vista de cada jugador)
-const COLOR_FLECHA = { verde: "#5FBF5A", amarillo: "#E2C33C", rojo: "#D9443A", naranja: "#F0963C", azul: "#6FA8DC" };
+const COLOR_FLECHA = { verde: "#5FBF5A", amarillo: "#E2C33C", rojo: "#D9443A", naranja: "#F0963C", azul: "#6FA8DC", morado: "#B47CF0" };
 function pintarFlechas() {
   const tab = $("tablero");
   tab.querySelector(".flechas")?.remove();
@@ -1897,7 +2098,7 @@ function pintarFlechas() {
     const f = "abcdefgh".indexOf(sq[0]), r = Number(sq[1]);
     return [(volteado ? 7 - f : f) + 0.5, (volteado ? r - 1 : 8 - r) + 0.5];
   };
-  const svg = todas.map((fl, i) => {
+  const svg = todas.filter((fl) => fl.de !== fl.a).map((fl, i) => {
     const [x1, y1] = xy(fl.de), [x2, y2] = xy(fl.a);
     const ang = Math.atan2(y2 - y1, x2 - x1), L = Math.hypot(x2 - x1, y2 - y1);
     const fin = L - 0.32;
@@ -1994,6 +2195,7 @@ function pintarEntrenador() {
   pintarTema();
   pintarPlan();
   pintarRepaso();
+  pintarNotas();
   pintarFlechas();
 }
 
@@ -2014,6 +2216,7 @@ function contarLocal() {
   else n.p++;
   rec[partida.nivel] = n;
   try { LS?.setItem("ajedrez-maquina-record", JSON.stringify(rec)); } catch {}
+  marcarCambioLocal();
 }
 
 // ---------- Partida ----------
