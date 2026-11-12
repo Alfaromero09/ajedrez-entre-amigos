@@ -1070,15 +1070,34 @@ const filaMaquina = (clase) => `<div class="${clase} maquina">${ficha(MAQUINA, "
   (clase === "fila" ? '<button class="btn-fila verde" data-maquina="1">Jugar</button>' : '<span class="izq-acciones"><button type="button" class="izq-jugar" data-maquina="1">Jugar</button></span>') + "</div>";
 
 let motor = null, motorListo = null, pensandoMaquina = false;
+// Arranca Stockfish: primero desde tu sitio (/motor) y, si no está, desde una copia pública (jsDelivr)
+const MOTOR_CDN = "https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/";
+function crearMotor(origen) {
+  return new Promise((listo, falla) => {
+    let w;
+    try {
+      if (origen === "local") w = new Worker("/motor/stockfish.js");
+      else {
+        const codigo = `self.Module = { locateFile: (f) => "${MOTOR_CDN}" + f }; importScripts("${MOTOR_CDN}stockfish.js");`;
+        w = new Worker(URL.createObjectURL(new Blob([codigo], { type: "application/javascript" })));
+      }
+    } catch (e) { return falla(e); }
+    const t = setTimeout(() => { w.terminate(); falla(new Error("sin respuesta")); }, origen === "local" ? 7000 : 15000);
+    const escuchar = (e) => {
+      if (String(e.data).startsWith("uciok")) { clearTimeout(t); w.removeEventListener("message", escuchar); listo(w); }
+    };
+    w.addEventListener("message", escuchar);
+    w.onerror = () => { clearTimeout(t); w.terminate(); falla(new Error("no cargó")); };
+    w.postMessage("uci");
+  });
+}
+let origenMotor = null;
 function iniciarMotor() {
   if (motorListo) return motorListo;
-  motorListo = new Promise((listo, falla) => {
-    try { motor = new Worker("/motor/stockfish.js"); } catch (e) { return falla(e); }
-    const escuchar = (e) => { if (String(e.data).startsWith("uciok")) { motor.removeEventListener("message", escuchar); listo(); } };
-    motor.addEventListener("message", escuchar);
-    motor.onerror = () => falla(new Error("motor"));
-    motor.postMessage("uci");
-  });
+  motorListo = crearMotor("local").then((w) => { origenMotor = "tu sitio"; return w; })
+    .catch(() => crearMotor("cdn").then((w) => { origenMotor = "copia pública"; return w; }))
+    .then((w) => { motor = w; })
+    .catch((e) => { motorListo = null; throw e; });
   return motorListo;
 }
 // Un solo motor, una tarea a la vez (jugar o analizar)
@@ -1211,7 +1230,7 @@ async function probarMotor() {
     }), 8000));
     estadoMotor = !!r && r !== "(none)";
   } catch { estadoMotor = false; }
-  if (!estadoMotor) motorFallo = true;
+  if (!estadoMotor) { motorFallo = true; setTimeout(() => { estadoMotor = null; }, 30000); }
   return estadoMotor;
 }
 function pintarEstadoMotor() {
@@ -1219,8 +1238,8 @@ function pintarEstadoMotor() {
   if (estadoMotor === null) { el.className = "vsm-motor"; el.textContent = "Revisando el motor…"; return; }
   el.className = `vsm-motor ${estadoMotor ? "ok" : "mal"}`;
   el.innerHTML = estadoMotor
-    ? "✅ Motor Stockfish listo: los niveles 1 a 4 juegan a su fuerza real."
-    : "⚠️ <strong>El motor Stockfish no cargó.</strong> La Máquina jugaría en modo sencillo (muy débil) en cualquier nivel. Revisa que la carpeta <strong>motor</strong> esté en GitHub.";
+    ? `✅ Motor Stockfish listo${origenMotor === "copia pública" ? " (cargado desde la copia pública; para que cargue desde tu sitio, sube la carpeta «motor» a GitHub)" : ""}: los niveles 1 a 4 juegan a su fuerza real.`
+    : "⚠️ <strong>El motor Stockfish no cargó</strong> ni desde tu sitio ni desde la copia pública. La Máquina jugaría en modo sencillo (muy débil). Revisa tu conexión y que la carpeta <strong>motor</strong> esté en GitHub.";
 }
 function abrirVsMaquina() {
   const c = configLocal();
