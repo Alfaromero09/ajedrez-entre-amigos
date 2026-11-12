@@ -3,6 +3,7 @@ import { Chess } from "https://esm.sh/chess.js@1.4.0";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 import { piezaSVG, iconoSVG } from "./piezas.js";
 import { TABLEROS, PIEZAS, DEFS_3D, pieza as dibujoPieza } from "./estilos.js";
+import { APERTURAS, LECCIONES, TEMAS } from "./lecciones.js";
 
 const $ = (id) => document.getElementById(id);
 const COLUMNAS = "abcdefgh";
@@ -62,6 +63,7 @@ const vieneDeConfirmar = !vieneDeRecuperar && (/type=(signup|email|invite)/.test
 const esMovil = matchMedia("(hover: none) and (pointer: coarse)").matches;
 
 function mostrar(vista) {
+  if (vista !== "partida") document.body.classList.remove("sin-reloj", "vs-maquina");
   $("ir-inicio")?.classList.toggle("oculto", vista !== "partida");
   if (vista === "acceso" && typeof prepararAcceso === "function") prepararAcceso();
   for (const v of ["acceso", "inicio", "partida"]) $(v).classList.toggle("oculto", v !== vista);
@@ -333,7 +335,10 @@ async function crearMesa(minutos, rival) {
   if (rival && enLinea[rival] && !enLinea[rival].jugando) llamar(rival);
   return data;
 }
-$("crear").addEventListener("click", () => crearMesa(minutosElegidos, $("rival").value || null));
+$("crear").addEventListener("click", () => {
+  if ($("rival").value === MAQUINA) return abrirVsMaquina();
+  crearMesa(minutosElegidos, $("rival").value || null);
+});
 
 // ---------- Dashboard del club ----------
 const ICONO_RELOJ = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
@@ -570,7 +575,7 @@ function pintarEnLinea() {
   });
   const soloYo = conectados.length <= 1;
   $("en-linea").innerHTML =
-    `<h3 class="subtitulo"><span class="punto verde"></span>Conectados (${conectados.length})</h3>` +
+    `<h3 class="subtitulo"><span class="punto verde"></span>Conectados (${conectados.length})</h3>` + filaMaquina("fila") +
     (filasOn.join("") || "") +
     (soloYo ? '<p class="vacio-club">Nadie más está conectado ahorita.</p>' : "") +
     (fuera.length ? `<h3 class="subtitulo separado"><span class="punto gris"></span>Desconectados (${fuera.length})</h3>` +
@@ -594,6 +599,7 @@ function pintarResumen() {
 $("inicio").addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.dataset.maquina) return abrirVsMaquina();
   if (b.dataset.abrir) return irAPartida(b.dataset.abrir);
   if (b.dataset.retar) {
     b.disabled = true;
@@ -656,7 +662,7 @@ function presenciaEstado(donde) {
   presenciaJugando = estoyJugando();
   canalClub.track({ nombre: nombres[yo] || "Jugador", avatar: avatares[yo] || "rey", donde, jugando: presenciaJugando }).catch(() => {});
 }
-const estoyJugando = () => !!(partida && partida.estado === "jugando" && miColor());
+const estoyJugando = () => !!(partida && !partida.local && partida.estado === "jugando" && miColor());
 function actualizarPresencia() {
   if (estoyJugando() !== presenciaJugando) presenciaEstado(presenciaDonde);
 }
@@ -692,9 +698,9 @@ function pintarRivales(mesa) {
   const sel = $("rival");
   const antes = sel.value;
   const otros = mesa.filter((m) => m.id !== yo).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  sel.innerHTML = '<option value="">Cualquiera del club</option>' +
+  sel.innerHTML = '<option value="">Cualquiera del club</option><option value="maquina">🤖 Máquina (práctica)</option>' +
     otros.map((m) => `<option value="${m.id}">${esc(m.nombre)}${enLinea[m.id] ? " · conectado" : ""}</option>`).join("");
-  if (otros.some((m) => m.id === antes)) sel.value = antes;
+  if (antes === MAQUINA || otros.some((m) => m.id === antes)) sel.value = antes;
 }
 
 // ---------- Mis partidas: en juego, en pausa y canceladas ----------
@@ -719,6 +725,10 @@ function pintarMisPartidas(activas, canceladas) {
       return `<div class="fila apagada">${ficha(rival(x), "chica")}<div><strong>vs ${vs(x)}</strong><small>${esc(quien)}${x.pausa_motivo && x.pausa_motivo !== "Cancelada" ? `: ${esc(x.pausa_motivo)}` : ""} · ${hacePoco(x.actualizada)}</small></div><span class="estado-chip cancelada">CANCELADA</span></div>`;
     }),
   ];
+  const local = partidaLocalGuardada();
+  if (local && local.estado === "jugando") {
+    filas.unshift(`<div class="fila maquina">${ficha(MAQUINA, "chica robot")}<div><strong>vs Máquina</strong><small>Nivel ${NIVELES[local.nivel]?.nombre || ""} · práctica</small></div><span class="estado-chip jugando">PLAYING</span><button class="btn-fila dorado" data-abrir="${MAQUINA}">Abrir</button></div>`);
+  }
   $("mis-partidas").innerHTML = filas.join("") || '<p class="vacio-club">No tienes partidas en curso, en pausa ni canceladas recientes.</p>';
 }
 
@@ -1035,6 +1045,676 @@ $("permiso-avisos").addEventListener("click", async () => {
 });
 pintarPermisoAvisos();
 
+// ---------- Jugar contra la Máquina (Stockfish en el navegador, GPL-3.0) ----------
+const MAQUINA = "maquina";
+nombres[MAQUINA] = "Máquina";
+avatares[MAQUINA] = "rey";
+fotos[MAQUINA] = "data:image/svg+xml," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' fill='#2E3B2A'/>" +
+  "<line x1='20' y1='6' x2='20' y2='11' stroke='#E3C77E' stroke-width='2'/><circle cx='20' cy='5' r='2.3' fill='#E3C77E'/>" +
+  "<rect x='9' y='11' width='22' height='17' rx='5' fill='#F2E6CF'/><circle cx='15.5' cy='19' r='2.6' fill='#2A1C0C'/>" +
+  "<circle cx='24.5' cy='19' r='2.6' fill='#2A1C0C'/><rect x='15' y='24' width='10' height='2' rx='1' fill='#2A1C0C'/>" +
+  "<rect x='12' y='29' width='16' height='6' rx='2' fill='#CDA54E'/></svg>");
+const NIVELES = {
+  facil:   { nombre: "1 (Fácil)",   habilidad: 0,  profundidad: 1,  ms: 150,  azar: 0.35 },
+  medio:   { nombre: "2 (Medio)",   habilidad: 6,  profundidad: 5,  ms: 450,  azar: 0.05 },
+  dificil: { nombre: "3 (Difícil)", habilidad: 13, profundidad: 10, ms: 1000, azar: 0 },
+  maestro: { nombre: "4 (Maestro)", habilidad: 20, profundidad: 18, ms: 1800, azar: 0 },
+};
+const filaMaquina = (clase) => `<div class="${clase} maquina">${ficha(MAQUINA, "punto-verde robot")}<div><strong>Máquina</strong><small>Siempre disponible</small></div>` +
+  (clase === "fila" ? '<button class="btn-fila verde" data-maquina="1">Jugar</button>' : '<span class="izq-acciones"><button type="button" class="izq-jugar" data-maquina="1">Jugar</button></span>') + "</div>";
+
+let motor = null, motorListo = null, pensandoMaquina = false;
+function iniciarMotor() {
+  if (motorListo) return motorListo;
+  motorListo = new Promise((listo, falla) => {
+    try { motor = new Worker("/motor/stockfish.js"); } catch (e) { return falla(e); }
+    const escuchar = (e) => { if (String(e.data).startsWith("uciok")) { motor.removeEventListener("message", escuchar); listo(); } };
+    motor.addEventListener("message", escuchar);
+    motor.onerror = () => falla(new Error("motor"));
+    motor.postMessage("uci");
+  });
+  return motorListo;
+}
+// Un solo motor, una tarea a la vez (jugar o analizar)
+let colaMotor = Promise.resolve();
+function enCola(tarea) { const p = colaMotor.then(tarea, tarea); colaMotor = p.catch(() => {}); return p; }
+async function jugadaMotor(fen, nivel) {
+  const n = NIVELES[nivel] || NIVELES.medio;
+  // En fácil, a veces juega una jugada cualquiera para ser más humano
+  if (Math.random() < n.azar) {
+    const opciones = new Chess(fen).moves({ verbose: true });
+    const m = opciones[Math.floor(Math.random() * opciones.length)];
+    return m ? m.from + m.to + (m.promotion || "") : null;
+  }
+  await iniciarMotor();
+  return enCola(() => new Promise((listo) => {
+    const escuchar = (e) => {
+      const t = String(e.data);
+      if (t.startsWith("bestmove")) { motor.removeEventListener("message", escuchar); listo(t.split(" ")[1]); }
+    };
+    motor.addEventListener("message", escuchar);
+    motor.postMessage("setoption name MultiPV value 1");
+    motor.postMessage(`setoption name Skill Level value ${n.habilidad}`);
+    motor.postMessage(`position fen ${fen}`);
+    motor.postMessage(`go depth ${n.profundidad} movetime ${n.ms}`);
+  }));
+}
+
+// Análisis a toda fuerza: las mejores líneas con su evaluación (desde el lado que mueve)
+async function analizar(fen, lineas = 3, ms = 700) {
+  await iniciarMotor();
+  return enCola(() => new Promise((listo) => {
+    const res = {};
+    const escuchar = (e) => {
+      const t = String(e.data);
+      if (t.startsWith("info") && t.includes(" pv ") && t.includes(" score ")) {
+        const k = Number((t.match(/ multipv (\d+)/) || [0, 1])[1]);
+        const cp = t.match(/ score cp (-?\d+)/), mate = t.match(/ score mate (-?\d+)/);
+        const pv = t.split(" pv ")[1].trim().split(" ");
+        res[k] = { uci: pv[0], pv, cp: cp ? Number(cp[1]) : null, mate: mate ? Number(mate[1]) : null };
+      } else if (t.startsWith("bestmove")) {
+        motor.removeEventListener("message", escuchar);
+        listo(Object.keys(res).sort((a, b) => a - b).map((k) => ({ ...res[k], valor: valorDe(res[k]) })));
+      }
+    };
+    motor.addEventListener("message", escuchar);
+    motor.postMessage("setoption name Skill Level value 20");
+    motor.postMessage(`setoption name MultiPV value ${lineas}`);
+    motor.postMessage(`position fen ${fen}`);
+    motor.postMessage(`go depth 14 movetime ${ms}`);
+  }));
+}
+const valorDe = (l) => (l.mate != null ? (l.mate > 0 ? 10000 - l.mate * 10 : -10000 - l.mate * 10) : l.cp ?? 0);
+
+const configLocal = () => { try { return JSON.parse(LS?.getItem("ajedrez-maquina-config") || "null") || { nivel: "medio", color: "w", min: 0 }; } catch { return { nivel: "medio", color: "w", min: 0 }; } };
+const partidaLocalGuardada = () => { try { return JSON.parse(LS?.getItem("ajedrez-maquina") || "null"); } catch { return null; } };
+const guardarLocal = () => { try { LS?.setItem("ajedrez-maquina", JSON.stringify({ ...partida, optimista: false })); } catch {} };
+const recordLocal = () => { try { return JSON.parse(LS?.getItem("ajedrez-maquina-record") || "{}"); } catch { return {}; } };
+
+function pintarLeccionesModal(elegida) {
+  $("vsm-lecciones").innerHTML = LECCIONES.map((l) =>
+    `<button type="button" data-leccion="${l.id}" aria-pressed="${l.id === elegida}"><b>${esc(l.nombre)}</b><small>Juegas con ${l.color === "w" ? "blancas" : "negras"} · ${esc(l.nivel)}</small></button>`).join("");
+}
+function modoModal(modo) {
+  $("vsm-modo").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.modo === modo)));
+  $("vsm-lecciones").classList.toggle("oculto", modo !== "leccion");
+  $("vsm-grupo-color").classList.toggle("oculto", modo === "leccion");
+  if (modo === "leccion") $("vsm-entrenador").checked = true;
+}
+$("vsm-modo").addEventListener("click", (e) => { const b = e.target.closest("button[data-modo]"); if (b) modoModal(b.dataset.modo); });
+$("vsm-lecciones").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-leccion]");
+  if (!b) return;
+  $("vsm-lecciones").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+});
+function abrirVsMaquina() {
+  const c = configLocal();
+  pintarLeccionesModal(c.leccion || LECCIONES[0].id);
+  modoModal(c.modo || "libre");
+  $("vsm-entrenador").checked = c.didactico !== false;
+  const marcar = (caja, attr, valor) => $(caja).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(valor))));
+  marcar("vsm-nivel", "nivel", c.nivel); marcar("vsm-color", "color", c.color); marcar("vsm-tiempo", "min", c.min);
+  pintarRecord(c.nivel);
+  const guardada = partidaLocalGuardada();
+  $("vsm-empezar").textContent = guardada && guardada.estado === "jugando" ? "Empezar una nueva (la anterior se descarta)" : "Empezar partida";
+  $("vs-maquina").classList.remove("oculto");
+  iniciarMotor().catch(() => {});
+}
+function pintarRecord(nivel) {
+  const r = recordLocal()[nivel] || { g: 0, p: 0, t: 0 };
+  $("vsm-record").textContent = r.g + r.p + r.t ? `Tu récord en el nivel ${NIVELES[nivel].nombre}: ${r.g} ganadas · ${r.p} perdidas · ${r.t} tablas` : `Aún no juegas en el nivel ${NIVELES[nivel].nombre}.`;
+}
+["vsm-nivel", "vsm-color", "vsm-tiempo"].forEach((id) => $(id).addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  $(id).querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  if (b.dataset.nivel) pintarRecord(b.dataset.nivel);
+}));
+$("vsm-cerrar").addEventListener("click", () => $("vs-maquina").classList.add("oculto"));
+$("vs-maquina").addEventListener("click", (e) => { if (e.target.id === "vs-maquina") $("vs-maquina").classList.add("oculto"); });
+$("vsm-empezar").addEventListener("click", () => {
+  const elegido = (id, attr) => $(id).querySelector('button[aria-pressed="true"]')?.dataset[attr];
+  const modo = elegido("vsm-modo", "modo") || "libre";
+  const leccion = modo === "leccion" ? (elegido("vsm-lecciones", "leccion") || LECCIONES[0].id) : null;
+  const cfg = { nivel: elegido("vsm-nivel", "nivel") || "medio", color: elegido("vsm-color", "color") || "w", min: Number(elegido("vsm-tiempo", "min") || 0),
+    modo, leccion, didactico: modo === "leccion" || $("vsm-entrenador").checked };
+  LS?.setItem("ajedrez-maquina-config", JSON.stringify(cfg));
+  $("vs-maquina").classList.add("oculto");
+  empezarLocal(cfg);
+});
+
+function empezarLocal(cfg) {
+  const leccion = cfg.leccion ? LECCIONES.find((l) => l.id === cfg.leccion) : null;
+  const color = leccion ? leccion.color : cfg.color === "azar" ? (Math.random() < 0.5 ? "w" : "b") : cfg.color;
+  const ms = cfg.min ? cfg.min * 60000 : 24 * 3600000;
+  partida = {
+    id: MAQUINA, local: true, nivel: cfg.nivel, minutos: cfg.min || 0,
+    blancas: color === "w" ? yo : MAQUINA, negras: color === "w" ? MAQUINA : yo,
+    estado: "jugando", fen: new Chess().fen(), jugadas: [], resultado: null, motivo: null,
+    reloj_blancas: ms, reloj_negras: ms, ultimo_tick: new Date(ahoraServidor()).toISOString(),
+    version: 1, actualizada: new Date().toISOString(),
+    didactico: !!cfg.didactico, leccion: leccion ? leccion.id : null, ayudas: 0, tema: cfg.tema || null,
+  };
+  flechas = []; analisisTurno = null; ultimaApertura = null; pistasVisibles = false; vistaIndice = null;
+  $("ent-pistas").setAttribute("aria-pressed", "false");
+  $("ent-pistas").textContent = "💡 Ver mejores jugadas";
+  guardarLocal();
+  avisosTiempo.delete(MAQUINA);
+  motor?.postMessage("ucinewgame");
+  history.pushState(null, "", `?p=${MAQUINA}`);
+  abrirLocal(true);
+  if (leccion) reproducirLeccion(leccion);
+  else if (partida.didactico) tarjeta("", `<span class="ent-veredicto">🎓 Entrenador listo</span><p>Juega con calma: después de cada jugada te digo si fue buena o no, con flechas. Si te equivocas, puedes <strong>deshacer</strong>.</p>`);
+}
+
+function abrirLocal(recien) {
+  mostrar("partida");
+  const g = recien ? partida : partidaLocalGuardada();
+  if (!g || (g.blancas !== yo && g.negras !== yo)) {
+    avisar("No tienes una partida contra la Máquina. Empieza una nueva.");
+    history.replaceState(null, "", "./");
+    mostrar("inicio");
+    return abrirVsMaquina();
+  }
+  // Al volver a abrirla, el reloj continúa desde donde se quedó
+  if (!recien && g.estado === "jugando") g.ultimo_tick = new Date(ahoraServidor()).toISOString();
+  partida = g;
+  cerrarVideo();
+  if (canal) { sb.removeChannel(canal); canal = null; }
+  document.body.classList.toggle("sin-reloj", !partida.minutos);
+  document.body.classList.add("vs-maquina");
+  elegida = null; movimientos = [];
+  cargarChat(MAQUINA);
+  pintarMesaPartida();
+  pintarLineaPartida();
+  dibujar();
+  if (!recien && partida.didactico) { flechas = []; tarjeta("", `<span class="ent-veredicto">🎓 Seguimos</span><p>Retomamos tu partida. ${partida.estado === "jugando" ? "Te toca pensar tu jugada." : ""}</p>`); pintarApertura(); entrenadorTuTurno(); }
+  if (!(recien && partida.leccion)) turnoMaquina();
+}
+
+function ajustarVistaLocal(color, turno) {
+  pintarEntrenador();
+  $("chat").classList.add("oculto");
+  $("control-estado").classList.add("oculto");
+  $("aviso-pausa").classList.add("oculto");
+  $("ofrecer-tablas").classList.add("oculto");
+  $("oferta-tablas").classList.add("oculto");
+  if (partida.estado === "jugando") {
+    const nivel = NIVELES[partida.nivel]?.nombre || "";
+    $("estado").innerHTML = turno === color
+      ? `Tu turno contra la Máquina · nivel ${esc(nivel)}.`
+      : `La Máquina está pensando<span class="pensando" aria-hidden="true"><i></i><i></i><i></i></span>`;
+  }
+  $("nueva").classList.add("oculto");
+  if (ocupadoEntrenador && partida.leccion && enviando) $("estado").textContent = "Mira la lección: las jugadas se hacen solas.";
+  if (vistaIndice !== null) $("estado").textContent = "Estás repasando la partida. Toca ⏭ para volver y seguir jugando.";
+}
+
+let guiaJugada = null;
+function moverLocal(desde, hacia, promocion) {
+  const fenAntes = partida.fen;
+  guiaJugada = guiaActual;
+  vistaIndice = null;
+  const nueva = aplicarLocal(desde, hacia, promocion);
+  if (!nueva) return;
+  const miJugada = partida.blancas === yo ? new Chess(fenAntes).turn() === "w" : new Chess(fenAntes).turn() === "b";
+  partida = { ...nueva, optimista: false, version: partida.version + 1, actualizada: new Date().toISOString() };
+  elegida = null; movimientos = [];
+  guardarLocal();
+  dibujar();
+  if (partida.didactico) {
+    entrenadorDespuesDeJugada(fenAntes, desde + hacia + (promocion || ""), miJugada);
+    if (miJugada) return;   // el entrenador analiza y después juega la Máquina
+  }
+  if (partida.estado === "terminada") return contarLocal();
+  turnoMaquina();
+}
+
+async function turnoMaquina() {
+  if (!partida?.local || partida.estado !== "jugando" || pensandoMaquina || ocupadoEntrenador) return;
+  const colorMaquina = partida.blancas === MAQUINA ? "w" : "b";
+  if (new Chess(partida.fen).turn() !== colorMaquina) return;
+  pensandoMaquina = true;
+  const fenAntes = partida.fen, inicio = Date.now();
+  let uci = null;
+  const t = temaActivo();
+  if (t) {
+    const jug = partida.jugadas.map((j) => limpiaSan(j.san)), linea = t.linea.split(" ");
+    if (jug.length < linea.length && jug.every((x, i) => linea[i] === x)) {
+      const m = movLegal(fenAntes, linea[jug.length]);
+      if (m) uci = m.from + m.to + (m.promotion || "");
+    }
+  }
+  if (!uci) try { uci = await jugadaMotor(fenAntes, partida.nivel); } catch { avisar("No se pudo cargar la Máquina. Revisa tu conexión y recarga."); }
+  // Una pausa breve para que se sienta natural
+  const espera = 500 - (Date.now() - inicio);
+  if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+  pensandoMaquina = false;
+  if (!uci || uci === "(none)" || !partida?.local || partida.fen !== fenAntes || partida.estado !== "jugando") return;
+  moverLocal(uci.slice(0, 2), uci.slice(2, 4), uci[4]);
+}
+
+// ======================= ENTRENADOR =======================
+const ESPN = { N: "C", B: "A", R: "T", Q: "D", K: "R" };
+const sanEs = (san) => String(san || "").replace(/^[NBRQK]/, (l) => ESPN[l]).replace(/=([NBRQ])/, (m, l) => "=" + ESPN[l]);
+const limpiaSan = (san) => String(san).replace(/[+#]/g, "");
+let flechas = [];
+let pistasVisibles = false;
+let analisisTurno = null;      // { fen, lineas }
+let ultimaApertura = null;
+let ocupadoEntrenador = false;
+
+function uciASan(fen, uci) {
+  try { const c = new Chess(fen); const m = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" }); return m; } catch { return null; }
+}
+function textoEval(valor) {
+  if (Math.abs(valor) >= 9000) return valor > 0 ? "tienes mate a la vista" : "te pueden dar mate";
+  const p = valor / 100;
+  if (Math.abs(p) < 0.3) return "posición pareja";
+  return p > 0 ? `vas mejor por ${p.toFixed(1)} peones` : `vas peor por ${Math.abs(p).toFixed(1)} peones`;
+}
+// Explica en palabras qué hace una jugada
+function porQueJugada(fen, uci) {
+  const c = new Chess(fen);
+  let m; try { m = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" }); } catch { return ""; }
+  const ideas = [];
+  const nombre = { p: "peón", n: "caballo", b: "alfil", r: "torre", q: "dama", k: "rey" };
+  if (c.isCheckmate()) return "¡da jaque mate!";
+  if (m.flags.includes("k") || m.flags.includes("q")) ideas.push("pone a salvo al rey con el enroque");
+  if (m.captured) ideas.push(`captura ${m.captured === "p" ? "un peón" : "el " + nombre[m.captured]}`);
+  if (c.inCheck()) ideas.push("da jaque");
+  if (m.promotion) ideas.push("corona un peón");
+  const fila = m.from[1];
+  const atras = (m.color === "w" && fila === "1") || (m.color === "b" && fila === "8");
+  if (!m.captured && (m.piece === "n" || m.piece === "b") && atras) ideas.push(`desarrolla el ${nombre[m.piece]}`);
+  if (m.piece === "p" && ["d4", "e4", "d5", "e5", "c4", "c5"].includes(m.to)) ideas.push("lucha por el centro");
+  if (!ideas.length) ideas.push("mejora la posición de tus piezas");
+  return ideas.join(" y ");
+}
+function apertura(jugadas) {
+  const sec = jugadas.map((j) => limpiaSan(j.san)).join(" ");
+  let mejor = null;
+  for (const [nombre, movs, idea] of APERTURAS) {
+    if ((sec + " ").startsWith(movs + " ") || sec === movs) { if (!mejor || movs.length > mejor.movs.length) mejor = { nombre, movs, idea }; }
+  }
+  return mejor;
+}
+// Consejos clásicos de apertura según lo que acabas de jugar
+function consejoPrincipio(fenAntes, m, jugadas) {
+  const n = Math.ceil(jugadas.length / 2);
+  if (n > 12) return "";
+  if (m.piece === "q" && n <= 5 && !m.captured) return "Consejo: sacar la dama tan pronto la expone a ataques; primero desarrolla caballos y alfiles.";
+  const mias = jugadas.filter((_, i) => (i % 2 === 0) === (m.color === "w"));
+  const misPiezas = mias.slice(0, -1).map((j) => j.hacia);
+  if (n <= 8 && m.piece !== "p" && misPiezas.includes(m.from) && !m.captured) return "Consejo: en la apertura evita mover la misma pieza dos veces; desarrolla las demás.";
+  if (n >= 9 && !m.flags.includes("k") && !m.flags.includes("q")) {
+    const c = new Chess(partida.fen);
+    const rey = c.board().flat().find((x) => x && x.type === "k" && x.color === m.color);
+    if (rey && ["e1", "e8", "d1", "d8"].includes(rey.square)) return "Consejo: tu rey sigue en el centro; enrocar pronto lo protege.";
+  }
+  return "";
+}
+
+function tarjeta(clase, html, tipo = "") {
+  const t = $("ent-tarjeta");
+  t.className = `ent-tarjeta ${clase || ""}`;
+  t.dataset.tipo = tipo;
+  t.innerHTML = html;
+}
+function pintarApertura() {
+  const a = apertura(partida.jugadas);
+  const chip = $("ent-apertura");
+  chip.classList.toggle("oculto", !a);
+  if (!a) return null;
+  chip.textContent = `📖 ${a.nombre}`;
+  const nueva = a.nombre !== ultimaApertura;
+  ultimaApertura = a.nombre;
+  return nueva ? a : null;
+}
+
+// Antes de tu jugada: analiza para poder calificarla y mostrar pistas
+async function entrenadorTuTurno() {
+  if (!partida?.didactico || partida.estado !== "jugando") return;
+  const fen = partida.fen;
+  const lineas = await analizar(fen, 3, 700).catch(() => null);
+  if (!lineas || partida.fen !== fen) return null;
+  analisisTurno = { fen, lineas };
+  if (pistasVisibles) mostrarPistas();
+  return lineas;
+}
+function mostrarPistas() {
+  if (!analisisTurno || analisisTurno.fen !== partida.fen) return;
+  const [a, ...resto] = analisisTurno.lineas;
+  flechas = flechas.filter((f) => f.color === "naranja");
+  if (a) flechas.push({ de: a.uci.slice(0, 2), a: a.uci.slice(2, 4), color: "verde" });
+  resto.slice(0, 2).forEach((l) => flechas.push({ de: l.uci.slice(0, 2), a: l.uci.slice(2, 4), color: "amarillo" }));
+  pintarFlechas();
+  const m = a && uciASan(partida.fen, a.uci);
+  if (m) tarjeta("mejor", `<span class="ent-veredicto">💡 Sugerencia</span><p>La flecha <strong style="color:#8FD88A">verde</strong> es la mejor: <strong>${esc(sanEs(m.san))}</strong>, porque ${esc(porQueJugada(partida.fen, a.uci))}. Las <strong style="color:#EBD46A">amarillas</strong> también son buenas.</p>`);
+}
+
+async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
+  if (!partida?.didactico) return;
+  const m = uciASan(fenAntes, uci);
+  const nueva = pintarApertura();
+  if (!miJugada) {
+    // Jugó la Máquina: explica y busca amenazas
+    flechas = [];
+    const extra = nueva ? `<p>📖 <strong>${esc(nueva.nombre)}</strong>: ${esc(nueva.idea)}</p>` : "";
+    const linea = `<p class="ent-respuesta">🤖 La Máquina respondió <strong>${esc(sanEs(m?.san))}</strong>: ${esc(porQueJugada(fenAntes, uci))}.</p>${extra}`;
+    // Tu veredicto se queda a la vista; la respuesta de la Máquina se agrega abajo
+    if ($("ent-tarjeta").dataset.tipo === "veredicto") $("ent-tarjeta").insertAdjacentHTML("beforeend", linea);
+    else tarjeta("", linea);
+    pintarFlechas();
+    const lineas = await entrenadorTuTurno();
+    buscarAmenaza(lineas?.[0]?.valor ?? 0);
+    return;
+  }
+  const guiaPrevia = guiaJugada;
+  ocupadoEntrenador = true;
+  $("ent-deshacer").disabled = true;
+  tarjeta("", `<span class="ent-veredicto">Analizando tu jugada<span class="analizando"><i></i><i></i><i></i></span></span>`);
+  $("ent-amenaza").classList.add("oculto");
+  try {
+    let antes = analisisTurno && analisisTurno.fen === fenAntes ? analisisTurno.lineas : await analizar(fenAntes, 3, 700);
+    const despues = partida.estado === "terminada" ? null : await analizar(partida.fen, 1, 600);
+    const mejor = antes[0];
+    const valorAntes = mejor ? mejor.valor : 0;
+    const valorDespues = partida.estado === "terminada"
+      ? (partida.resultado === "½-½" ? 0 : 10000)
+      : -(despues?.[0]?.valor ?? 0);
+    const perdida = Math.max(0, valorAntes - valorDespues);
+    const fueLaMejor = mejor && mejor.uci.slice(0, 4) === uci.slice(0, 4);
+    const enLista = antes.some((l) => l.uci.slice(0, 4) === uci.slice(0, 4));
+    let clase, titulo;
+    if (fueLaMejor) { clase = "mejor"; titulo = "✅ ¡La mejor jugada!"; }
+    else if (perdida <= 70 || enLista && perdida <= 100) { clase = "buena"; titulo = "👍 Buena jugada"; }
+    else if (perdida <= 160) { clase = "imprecision"; titulo = "🟡 Imprecisión"; }
+    else if (perdida <= 350) { clase = "error"; titulo = "🟠 Error"; }
+    else { clase = "grave"; titulo = "🔴 Error grave"; }
+    flechas = [];
+    const sanMejor = mejor && uciASan(fenAntes, mejor.uci);
+    let html = `<span class="ent-veredicto">${titulo}</span>`;
+    html += `<p>Jugaste <strong>${esc(sanEs(m?.san))}</strong>: ${esc(porQueJugada(fenAntes, uci))}.</p>`;
+    if (!fueLaMejor && sanMejor) {
+      html += `<p>${clase === "buena" ? "También estaba" : "Mejor era"} <strong style="color:#8FD88A">${esc(sanEs(sanMejor.san))}</strong> (flecha verde): ${esc(porQueJugada(fenAntes, mejor.uci))}.${perdida > 70 ? ` Te costó unos ${(perdida / 100).toFixed(1)} peones de ventaja.` : ""}</p>`;
+      flechas.push({ de: mejor.uci.slice(0, 2), a: mejor.uci.slice(2, 4), color: "verde" });
+      if (clase !== "buena") flechas.push({ de: uci.slice(0, 2), a: uci.slice(2, 4), color: "rojo" });
+    }
+    if (guiaPrevia?.m && !guiaPrevia.fin) {
+      const siguio = guiaPrevia.m.from + guiaPrevia.m.to === uci.slice(0, 4);
+      html += siguio
+        ? `<p>🎯 <strong>¡Seguiste el plan de ${esc(temaActivo()?.nombre || "tu tema")}!</strong></p>`
+        : `<p>🎯 Te saliste del plan (era <strong>${esc(sanEs(guiaPrevia.m.san))}</strong>). No pasa nada: te sigo guiando desde aquí.</p>`;
+    }
+    const consejo = m ? consejoPrincipio(fenAntes, m, partida.jugadas) : "";
+    if (consejo) html += `<p>${esc(consejo)}</p>`;
+    if (nueva) html += `<p>📖 <strong>${esc(nueva.nombre)}</strong>: ${esc(nueva.idea)}</p>`;
+    const ventaja = Math.max(-1000, Math.min(1000, valorDespues));
+    html += `<div class="ent-barra" title="Balance de la posición"><i style="width:${50 + ventaja / 20}%"></i></div><span class="ent-eval">${textoEval(valorDespues)}</span>`;
+    tarjeta(clase, html, "veredicto");
+    pintarFlechas();
+    if (["error", "grave"].includes(clase)) sonido("tiempo");
+  } catch { tarjeta("", "<p>No pude analizar esta jugada.</p>"); }
+  ocupadoEntrenador = false;
+  $("ent-deshacer").disabled = false;
+  if (partida.estado === "terminada") return contarLocal();
+  // Un momento para leer, y luego responde la Máquina
+  setTimeout(() => turnoMaquina(), 900);
+}
+
+// ¿Qué amenaza la Máquina si fuera su turno otra vez?
+async function buscarAmenaza(miValor = 0) {
+  const fen = partida.fen;
+  const partes = fen.split(" ");
+  partes[1] = partes[1] === "w" ? "b" : "w";
+  partes[3] = "-";
+  const fenRival = partes.join(" ");
+  let c; try { c = new Chess(fenRival); } catch { return; }
+  if (new Chess(fen).inCheck()) {
+    $("ent-amenaza").innerHTML = "⚠️ <strong>¡Estás en jaque!</strong> Primero protege a tu rey.";
+    return $("ent-amenaza").classList.remove("oculto");
+  }
+  const lineas = await analizar(fenRival, 1, 400).catch(() => null);
+  if (!lineas || partida.fen !== fen) return;
+  const l = lineas[0];
+  const m = l && uciASan(fenRival, l.uci);
+  // Solo es amenaza si, de poder jugar dos veces seguidas, la Máquina ganaría algo de verdad
+  const ganancia = l ? l.valor + miValor : 0;
+  const peligro = m && (m.san.includes("#") || (m.captured && m.captured !== "p" && ganancia >= 120) || ganancia >= 350);
+  $("ent-amenaza").classList.toggle("oculto", !peligro);
+  if (!peligro) return;
+  const nombre = { p: "un peón", n: "tu caballo", b: "tu alfil", r: "tu torre", q: "tu dama", k: "" };
+  $("ent-amenaza").innerHTML = `⚠️ <strong>Cuidado:</strong> la Máquina amenaza <strong>${esc(sanEs(m.san))}</strong> (flecha naranja)${m.captured ? `, que captura ${nombre[m.captured]}` : m.san.includes("#") ? ", ¡mate!" : m.san.includes("+") ? ", con jaque" : ""}.`;
+  flechas = flechas.filter((f) => f.color !== "naranja");
+  flechas.push({ de: l.uci.slice(0, 2), a: l.uci.slice(2, 4), color: "naranja" });
+  pintarFlechas();
+}
+
+// ---------- Practicar un tema: te guía jugada a jugada, aunque te salgas de la línea ----------
+let guiaActual = null;
+const temaActivo = () => (partida?.tema ? TEMAS.find((t) => t.id === partida.tema) : null);
+function movLegal(fen, san) { try { return new Chess(fen).move(san); } catch { return null; } }
+function guiaTema() {
+  const t = temaActivo();
+  if (!t || partida.estado !== "jugando" || t.color !== miColor()) return null;
+  if (new Chess(partida.fen).turn() !== miColor()) return null;
+  const jug = partida.jugadas.map((j) => limpiaSan(j.san));
+  const linea = t.linea.split(" ");
+  const enLinea = jug.length < linea.length && jug.every((m, i) => linea[i] === m);
+  const textoDe = (san) => (t.plan.find(([p]) => limpiaSan(p) === limpiaSan(san)) || [, ""])[1];
+  if (enLinea) {
+    const san = linea[jug.length];
+    const m = movLegal(partida.fen, san);
+    if (m) return { san, m, enLinea: true, texto: textoDe(san) };
+  }
+  const mias = jug.filter((_, i) => (i % 2 === 0) === (t.color === "w"));
+  for (const [san, texto] of t.plan) {
+    if (mias.includes(limpiaSan(san))) continue;
+    const m = movLegal(partida.fen, san);
+    if (m) return { san, m, enLinea: false, texto };
+  }
+  return { fin: true };
+}
+function pintarTema() {
+  const caja = $("ent-tema");
+  const t = temaActivo();
+  caja.classList.toggle("oculto", !t);
+  guiaActual = null;
+  if (!t) return;
+  const cabeza = `<div class="ent-tema-cabeza"><span>🎯 PRACTICANDO: ${esc(t.nombre.toUpperCase())}</span><button type="button" id="tema-quitar">Quitar</button></div>`;
+  if (t.color !== miColor()) {
+    caja.innerHTML = cabeza + `<p>Este tema se juega con <strong>${t.color === "w" ? "blancas" : "negras"}</strong> y en esta partida llevas ${miColor() === "w" ? "blancas" : "negras"}.</p><button type="button" class="btn-fila dorado" id="tema-nueva">Empezar partida con este tema</button>`;
+    return;
+  }
+  if (partida.estado !== "jugando") { caja.innerHTML = cabeza + "<p>La partida terminó. Empieza otra para seguir practicando.</p>"; return; }
+  if (vistaIndice !== null) { caja.innerHTML = cabeza + "<p>Estás repasando. Vuelve a la posición actual para seguir con el plan.</p>"; return; }
+  const g = guiaTema();
+  if (!g) { caja.innerHTML = cabeza + "<p>Espera la jugada de la Máquina…</p>"; return; }
+  if (g.fin) { caja.innerHTML = cabeza + "<p>✅ Ya completaste el plan de este tema. ¡Ahora juega libre con lo aprendido!</p>"; return; }
+  guiaActual = g;
+  caja.innerHTML = cabeza + `<p>${g.enLinea ? "Siguiendo la teoría, tu siguiente jugada es" : "Para volver al plan, tu siguiente jugada debería ser"} <strong>${esc(sanEs(g.m.san))}</strong> (flecha azul): ${esc(g.texto)}.</p>`;
+}
+document.addEventListener("click", (e) => {
+  if (e.target.id === "tema-quitar") { partida.tema = null; guardarLocal(); pintarTema(); pintarFlechas(); }
+  if (e.target.id === "tema-nueva") { const t = temaActivo(); empezarLocal({ ...configLocal(), color: t.color, didactico: true, leccion: null, tema: t.id }); }
+});
+function pintarListaTemas() {
+  const grupos = [...new Set(TEMAS.map((t) => t.grupo))];
+  $("ent-lista-temas").innerHTML = grupos.map((g) => `<h3>${esc(g)}</h3><div class="temas-grid">` +
+    TEMAS.filter((t) => t.grupo === g).map((t) => `<button type="button" data-tema="${t.id}" aria-pressed="${partida?.tema === t.id}"><b>${esc(t.nombre)}</b><small>Con ${t.color === "w" ? "blancas" : "negras"}</small></button>`).join("") + "</div>").join("");
+}
+$("ent-temas").addEventListener("click", () => {
+  const abrir = $("ent-lista-temas").classList.contains("oculto");
+  if (abrir) pintarListaTemas();
+  $("ent-lista-temas").classList.toggle("oculto", !abrir);
+  $("ent-temas").setAttribute("aria-expanded", String(abrir));
+});
+$("ent-lista-temas").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-tema]");
+  if (!b) return;
+  partida.tema = b.dataset.tema;
+  guardarLocal();
+  $("ent-lista-temas").classList.add("oculto");
+  $("ent-temas").setAttribute("aria-expanded", "false");
+  pintarTema();
+  pintarFlechas();
+  avisar(`🎯 Practicando: ${temaActivo().nombre}`);
+});
+
+// ---------- Repasar jugadas (adelante y atrás) ----------
+let vistaIndice = null;   // null = posición actual
+function juegoEn(n) { const c = new Chess(); partida.jugadas.slice(0, n).forEach((j) => c.move(j.san)); return c; }
+function irA(n) {
+  if (!partida?.local) return;
+  const total = partida.jugadas.length;
+  vistaIndice = n == null || n >= total ? null : Math.max(0, n);
+  elegida = null; movimientos = [];
+  dibujar();
+}
+function pintarRepaso() {
+  const total = partida.jugadas.length, n = vistaIndice ?? total;
+  $("rep-pos").textContent = vistaIndice === null ? `En vivo · ${Math.ceil(total / 2)} jugadas` : `Repasando ${n} de ${total}`;
+  document.querySelector(".ent-repaso").classList.toggle("activo", vistaIndice !== null);
+  document.querySelector(".escena").classList.toggle("repaso", vistaIndice !== null);
+  $("rep-inicio").disabled = $("rep-atras").disabled = n === 0;
+  $("rep-adelante").disabled = $("rep-fin").disabled = vistaIndice === null;
+  if (vistaIndice !== null) $("estado").textContent = "Estás repasando la partida. Toca ⏭ para volver y seguir jugando.";
+}
+$("rep-inicio").addEventListener("click", () => irA(0));
+$("rep-atras").addEventListener("click", () => irA((vistaIndice ?? partida.jugadas.length) - 1));
+$("rep-adelante").addEventListener("click", () => irA((vistaIndice ?? partida.jugadas.length) + 1));
+$("rep-fin").addEventListener("click", () => irA(null));
+$("jugadas").addEventListener("click", (e) => { const s = e.target.closest("[data-ir]"); if (s && partida?.local) irA(Number(s.dataset.ir)); });
+document.addEventListener("keydown", (e) => {
+  if (!partida?.local || $("partida").classList.contains("oculto") || e.target.closest("input, textarea")) return;
+  if (e.key === "ArrowLeft") { e.preventDefault(); irA((vistaIndice ?? partida.jugadas.length) - 1); }
+  if (e.key === "ArrowRight") { e.preventDefault(); irA((vistaIndice ?? partida.jugadas.length) + 1); }
+});
+
+// Dibuja las flechas sobre el tablero (respetan la vista de cada jugador)
+const COLOR_FLECHA = { verde: "#5FBF5A", amarillo: "#E2C33C", rojo: "#D9443A", naranja: "#F0963C", azul: "#6FA8DC" };
+function pintarFlechas() {
+  const tab = $("tablero");
+  tab.querySelector(".flechas")?.remove();
+  const todas = vistaIndice !== null ? [] : [...flechas, ...(guiaActual?.m ? [{ de: guiaActual.m.from, a: guiaActual.m.to, color: "azul" }] : [])];
+  if (!partida?.local || !todas.length) return;
+  const volteado = miColor() === "b";
+  const xy = (sq) => {
+    const f = "abcdefgh".indexOf(sq[0]), r = Number(sq[1]);
+    return [(volteado ? 7 - f : f) + 0.5, (volteado ? r - 1 : 8 - r) + 0.5];
+  };
+  const svg = todas.map((fl, i) => {
+    const [x1, y1] = xy(fl.de), [x2, y2] = xy(fl.a);
+    const ang = Math.atan2(y2 - y1, x2 - x1), L = Math.hypot(x2 - x1, y2 - y1);
+    const fin = L - 0.32;
+    const c = COLOR_FLECHA[fl.color];
+    return `<g transform="translate(${x1} ${y1}) rotate(${(ang * 180) / Math.PI})" opacity="${fl.color === "amarillo" ? 0.75 : 0.88}">
+      <line x1="0.18" y1="0" x2="${fin}" y2="0" stroke="${c}" stroke-width="${fl.color === "amarillo" ? 0.13 : 0.17}" stroke-linecap="round"/>
+      <polygon points="${L - 0.08},0 ${fin - 0.06},-0.27 ${fin - 0.06},0.27" fill="${c}"/></g>`;
+  }).join("");
+  tab.insertAdjacentHTML("beforeend", `<svg class="flechas" viewBox="0 0 8 8" aria-hidden="true">${svg}</svg>`);
+}
+
+$("ent-pistas").addEventListener("click", () => {
+  pistasVisibles = !pistasVisibles;
+  $("ent-pistas").setAttribute("aria-pressed", String(pistasVisibles));
+  $("ent-pistas").textContent = pistasVisibles ? "💡 Ocultar sugerencias" : "💡 Ver mejores jugadas";
+  if (pistasVisibles) { if (analisisTurno?.fen === partida.fen) mostrarPistas(); else entrenadorTuTurno(); }
+  else { flechas = flechas.filter((f) => f.color === "naranja"); pintarFlechas(); }
+});
+
+// Deshacer: regresa a antes de tu última jugada
+$("ent-deshacer").addEventListener("click", () => {
+  if (!partida?.local || ocupadoEntrenador || pensandoMaquina) return;
+  const jug = partida.jugadas.slice();
+  const miColorAhora = miColor();
+  const reponer = (lista) => { const c = new Chess(); lista.forEach((j) => c.move(j.san)); return c; };
+  let quitar = 0;
+  // Quita hasta que vuelva a ser tu turno, sin pasar del inicio de la lección
+  const minimo = partida.leccion ? (LECCIONES.find((l) => l.id === partida.leccion)?.pasos.length || 0) : 0;
+  do { quitar++; } while (jug.length - quitar > minimo && reponer(jug.slice(0, jug.length - quitar)).turn() !== miColorAhora);
+  if (jug.length - quitar < minimo) return avisar("Ya estás al inicio de la lección.");
+  const nuevas = jug.slice(0, jug.length - quitar);
+  const c = reponer(nuevas);
+  if (c.turn() !== miColorAhora) return avisar("No hay jugadas tuyas para deshacer.");
+  partida = { ...partida, fen: c.fen(), jugadas: nuevas, estado: "jugando", resultado: null, motivo: null, version: partida.version + 1, ultimo_tick: new Date(ahoraServidor()).toISOString(), ayudas: (partida.ayudas || 0) + 1 };
+  flechas = []; analisisTurno = null; vistaIndice = null;
+  guardarLocal();
+  cerrarFinal?.();
+  dibujar();
+  tarjeta("", `<span class="ent-veredicto">↶ Jugada deshecha</span><p>Piénsalo de nuevo. Puedes tocar «Ver mejores jugadas» si quieres una pista.</p>`);
+  $("ent-amenaza").classList.add("oculto");
+  entrenadorTuTurno();
+});
+
+// ---------- Lecciones guiadas: la apertura se juega sola, paso a paso, con explicación ----------
+async function reproducirLeccion(leccion) {
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+  ocupadoEntrenador = true;
+  enviando = true;   // nadie mueve mientras se reproduce la lección
+  $("ent-deshacer").disabled = true;
+  tarjeta("", `<span class="ent-paso">LECCIÓN · ${esc(leccion.nivel.toUpperCase())}</span><span class="ent-veredicto">${esc(leccion.nombre)}</span><p>${esc(leccion.intro)}</p>`);
+  await espera(2200);
+  for (let i = 0; i < leccion.pasos.length; i++) {
+    if (!partida?.local || partida.leccion !== leccion.id) return;
+    const [san, texto] = leccion.pasos[i];
+    const c = new Chess(partida.fen);
+    const m = c.move(san);
+    flechas = [{ de: m.from, a: m.to, color: "azul" }];
+    pintarFlechas();
+    tarjeta("", `<span class="ent-paso">PASO ${i + 1} DE ${leccion.pasos.length}</span><span class="ent-veredicto">${Math.floor(i / 2) + 1}.${i % 2 ? ".." : ""} ${esc(sanEs(m.san))}</span><p>${esc(texto)}</p>`);
+    await espera(1300);
+    const nueva = aplicarLocal(m.from, m.to, m.promotion);
+    partida = { ...nueva, optimista: false, version: partida.version + 1, ultimo_tick: new Date(ahoraServidor()).toISOString() };
+    guardarLocal();
+    sonido("turno");
+    dibujar();
+    pintarApertura();
+    await espera(1500);
+  }
+  ocupadoEntrenador = false;
+  enviando = false;
+  $("ent-deshacer").disabled = false;
+  dibujar();
+  const sug = uciDeSan(partida.fen, leccion.sugerencia);
+  flechas = sug ? [{ de: sug.slice(0, 2), a: sug.slice(2, 4), color: "verde" }] : [];
+  pintarFlechas();
+  const a = apertura(partida.jugadas);
+  tarjeta("mejor", `<span class="ent-veredicto">🎯 ¡Ahora tú!</span><p>${esc(leccion.cierre)}</p>${a ? `<p>📖 <strong>${esc(a.nombre)}</strong>: ${esc(a.idea)}</p>` : ""}<p>Desde aquí la partida sigue contra la Máquina y yo te voy comentando.</p>`);
+  entrenadorTuTurno();
+}
+function uciDeSan(fen, san) { try { const m = new Chess(fen).move(san); return m.from + m.to; } catch { return null; } }
+
+function pintarEntrenador() {
+  const ver = !!(partida?.local && partida.didactico);
+  $("entrenador").classList.toggle("oculto", !ver);
+  if (!ver) return;
+  pintarTema();
+  pintarRepaso();
+  pintarFlechas();
+}
+
+function terminarLocal(resultado, motivo) {
+  if (!partida?.local || partida.estado !== "jugando") return;
+  const r = restantes();
+  partida = { ...partida, estado: "terminada", resultado, motivo, reloj_blancas: r.w, reloj_negras: r.b, version: partida.version + 1, actualizada: new Date().toISOString() };
+  guardarLocal();
+  dibujar();
+  contarLocal();
+}
+function contarLocal() {
+  if (partida.didactico) return;   // las partidas con entrenador son de práctica
+  const rec = recordLocal();
+  const n = rec[partida.nivel] || { g: 0, p: 0, t: 0 };
+  if (partida.resultado === "½-½") n.t++;
+  else if ((partida.resultado === "1-0") === (partida.blancas === yo)) n.g++;
+  else n.p++;
+  rec[partida.nivel] = n;
+  try { LS?.setItem("ajedrez-maquina-record", JSON.stringify(rec)); } catch {}
+}
+
 // ---------- Partida ----------
 async function recargar(id) {
   const { data } = await sb.from("partidas").select("*").eq("id", id).single();
@@ -1042,6 +1722,9 @@ async function recargar(id) {
 }
 
 async function abrirPartida(id) {
+  if (id === MAQUINA) return abrirLocal();
+  document.body.classList.remove("sin-reloj", "vs-maquina");
+  $("entrenador").classList.add("oculto");
   mostrar("partida");
   const data = await recargar(id);
   if (!data) {
@@ -1106,6 +1789,7 @@ $("copiar").addEventListener("click", async () => {
 
 $("rendirse").addEventListener("click", async () => {
   if (!confirm("¿Seguro que quieres rendirte?")) return;
+  if (partida.local) return terminarLocal(miColor() === "w" ? "0-1" : "1-0", "abandono");
   const { error } = await sb.rpc("rendirse", { p: partida.id });
   if (error) avisar("No se pudo completar. Intenta de nuevo.");
 });
@@ -1175,6 +1859,10 @@ function actualizarRelojes() {
     }
   }
   const color = miColor();
+  if (partida.local) {
+    if (partida.estado === "jugando" && r[turno] <= 0) terminarLocal(turno === "w" ? "0-1" : "1-0", "tiempo");
+    return;
+  }
   if (partida.estado === "jugando" && color && r[turno] <= 0 && !reclamando) {
     reclamando = true;
     sb.rpc("reclamar_tiempo", { p: partida.id }).then(async () => {
@@ -1305,6 +1993,7 @@ $("final").addEventListener("click", (e) => { if (e.target.id === "final") cerra
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("final").classList.contains("oculto")) cerrarFinal(); });
 function cerrarFinal() { $("final").classList.add("oculto"); confeti = []; }
 $("final-revancha").addEventListener("click", async () => {
+  if (partida.local) { cerrarFinal(); return empezarLocal(configLocal()); }
   const rival = partida.blancas === yo ? partida.negras : partida.blancas;
   cerrarFinal();
   const ok = await crearMesa(partida.minutos || 10, rival);
@@ -1342,11 +2031,12 @@ function lanzarConfeti(cuantas) {
 
 // ---------- Dibujo ----------
 function dibujar() {
-  const juego = new Chess(partida.fen);
+  const enRepaso = !!(partida.local && vistaIndice !== null);
+  const juego = enRepaso ? juegoEn(vistaIndice) : new Chess(partida.fen);
   const color = miColor();
   const volteado = color === "b";
   const turno = juego.turn();
-  const ultima = partida.jugadas.at(-1);
+  const ultima = enRepaso ? partida.jugadas[vistaIndice - 1] : partida.jugadas.at(-1);
 
   const estado = $("estado");
   const jugando = partida.estado === "jugando";
@@ -1396,7 +2086,7 @@ function dibujar() {
 
   const tablero = $("tablero");
   tablero.innerHTML = "";
-  const puedoMover = jugando && color === turno && !enviando && !partida.optimista;
+  const puedoMover = jugando && color === turno && !enviando && !partida.optimista && !enRepaso;
   for (let fila = 0; fila < 8; fila++) {
     for (let col = 0; col < 8; col++) {
       const f = volteado ? 7 - col : col;
@@ -1437,6 +2127,7 @@ function dibujar() {
   estado.classList.toggle("cierre", partida.estado === "terminada");
   revisarFinal();
   revisarVideo();
+  if (partida.local) ajustarVistaLocal(color, turno);
   if (mesaPartidaDe && mesaPartidaDe !== `${partida.id}:${partida.estado}`) pintarMesaPartida();
 
   const lista = $("jugadas");
@@ -1445,9 +2136,11 @@ function dibujar() {
   for (let i = 0; i < partida.jugadas.length; i += 2) {
     const li = document.createElement("li");
     const b = partida.jugadas[i + 1];
-    li.innerHTML = `<span>${i / 2 + 1}.</span><span>${partida.jugadas[i].san}</span><span>${b ? b.san : ""}</span>`;
+    const marca = (k) => (partida.local && vistaIndice === k ? ' class="vista"' : "");
+    li.innerHTML = `<span>${i / 2 + 1}.</span><span data-ir="${i + 1}"${marca(i + 1)}>${partida.jugadas[i].san}</span><span${b ? ` data-ir="${i + 2}"${marca(i + 2)}` : ""}>${b ? b.san : ""}</span>`;
     lista.appendChild(li);
   }
+  lista.classList.toggle("navegable", !!partida.local);
 }
 
 function tocar(casilla, juego, puedoMover, color) {
@@ -1536,6 +2229,7 @@ function aplicarRemota(datos) {
 }
 
 async function mover(desde, hacia, promocion) {
+  if (partida.local) return moverLocal(desde, hacia, promocion);
   const previa = partida;
   const nueva = aplicarLocal(desde, hacia, promocion);
   if (!nueva) return;
@@ -1631,6 +2325,7 @@ async function cargarChat(id) {
   chatDe = id;
   vistos.clear();
   $("mensajes").innerHTML = "";
+  if (partida?.local) return;
   if (!miColor()) return;
   const { data } = await sb.from("mensajes").select("*").eq("partida", id).order("id", { ascending: true }).limit(200);
   if (chatDe !== id) return;
@@ -1694,7 +2389,7 @@ let mesaPartidaDe = null;
 async function pintarMesaPartida() {
   if (!partida) return;
   const id = partida.id;
-  const a = partida.blancas, b = partida.negras;
+  const a = partida.blancas, b = partida.local ? null : partida.negras;
   const [mesaR, caraR] = await Promise.all([
     sb.rpc("mesa_del_club"),
     b ? sb.from("partidas").select("blancas, negras, resultado").eq("estado", "terminada").not("resultado", "is", null)
@@ -1752,6 +2447,7 @@ function enviarRtc(datos) {
 // Muestra el panel y arranca la señalización cuando ya hay dos jugadores
 function revisarVideo() {
   if (!partida) return;
+  if (partida.local) { $("video").classList.add("oculto"); return; }
   const rival = rivalDe();
   const hay = !!rival && partida.estado !== "esperando";
   $("video").classList.toggle("oculto", !hay);
@@ -2076,6 +2772,7 @@ function irAlInicio() {
   mostrar("inicio");
 }
 function pedirSalida() {
+  if (partida?.local) return irAlInicio();
   const enJuego = partida && miColor() && partida.estado === "jugando";
   if (!enJuego) return irAlInicio();
   const rival = nombres[partida.blancas === yo ? partida.negras : partida.blancas] || "tu rival";
@@ -2115,9 +2812,9 @@ function pintarLineaPartida() {
   const otros = Object.keys(enLinea).filter((id) => id !== yo)
     .sort((a, b) => (enLinea[a].jugando - enLinea[b].jugando) || (enLinea[a].nombre || "").localeCompare(enLinea[b].nombre || ""));
   $("izq-cuenta").textContent = `${otros.length + 1} conectados`;
-  if (!otros.length) { $("izq-conectados").innerHTML = '<p class="izq-vacio">Nadie más está conectado ahorita.</p>'; return; }
+  if (!otros.length) { $("izq-conectados").innerHTML = (partida?.local ? "" : filaMaquina("izq-fila")) + '<p class="izq-vacio">Nadie más está conectado ahorita.</p>'; return; }
   const rivalActual = partida ? (partida.blancas === yo ? partida.negras : partida.blancas) : null;
-  $("izq-conectados").innerHTML = otros.map((id) => {
+  $("izq-conectados").innerHTML = (partida?.local ? "" : filaMaquina("izq-fila")) + otros.map((id) => {
     const u = enLinea[id];
     const lado = id === rivalActual ? '<span class="izq-ocupado" style="color:#A9CB9A">CONTIGO</span>'
       : u.jugando ? '<span class="izq-ocupado">OCUPADO</span>'
@@ -2128,6 +2825,7 @@ function pintarLineaPartida() {
   }).join("");
 }
 $("izq-conectados").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-maquina]")) return abrirVsMaquina();
   const p = e.target.closest("[data-privado]");
   if (p) return abrirPrivado(p.dataset.privado);
   const b = e.target.closest("[data-retar-izq]");

@@ -181,6 +181,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   .envoltura:has(#partida:not(.oculto)) { max-width: 1900px !important; }
   #partida { grid-template-columns: 230px minmax(0, 1fr) minmax(340px, 420px) 300px !important; }
   .lateral-chat { display: flex; flex-direction: column; position: sticky; top: 16px; }
+  body.vs-maquina #partida { grid-template-columns: 230px minmax(0, 1fr) minmax(340px, 420px) !important; }
+  body.vs-maquina .lateral-chat { display: none; }
   .lateral-chat #chat { max-height: calc(100vh - 40px); }
   .lateral-chat .mensajes { max-height: calc(100vh - 200px); min-height: 220px; }
 }
@@ -225,7 +227,7 @@ body.enfoque .lateral-izq, body.enfoque .lateral-chat { display: none !important
 .maximizar .icono-cerrar { display: none; }
 /* Modo tablero grande: solo el tablero y los relojes ocupan la pantalla */
 /* Pantalla completa: tablero grande + columna angosta con la cámara del rival y un chat mínimo */
-body.enfoque header, body.enfoque .barra-vista, body.enfoque .lateral > :not(#video):not(#chat):not(#panel-estado) { display: none !important; }
+body.enfoque header, body.enfoque .barra-vista, body.enfoque .lateral > :not(#video):not(#chat):not(#panel-estado):not(#entrenador) { display: none !important; }
 /* En pantalla completa, del panel de estado solo quedan el botón grande, las opciones de pausa y una oferta de tablas */
 body.enfoque #panel-estado > :not(#control-estado):not(#oferta-tablas) { display: none !important; }
 body.enfoque #panel-estado { padding: 10px; gap: 8px; }
@@ -690,6 +692,103 @@ body.enfoque .inicio-flotante { display: grid; }
 .izq-msj svg { width: 13px; height: 13px; }
 .izq-msj .globo { position: absolute; top: -4px; right: -4px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px; background: #C9603F; color: #FFF4EC; font-size: 9px; font-weight: 700; display: grid; place-items: center; }
 .izq-fila.activa { background: rgba(205,165,78,0.12); }
+
+/* ---------- Jugar contra la Máquina ---------- */
+.vsm-tarjeta { max-width: 480px; }
+.vsm-grupo { display: flex; flex-direction: column; gap: 8px; }
+.vsm-etiqueta { font-size: 13px; font-weight: 600; color: var(--suave); }
+.vsm-opciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.vsm-opciones.tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.vsm-opciones.cuatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.vsm-opciones button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 8px; border-radius: 12px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); }
+.vsm-opciones button b { font-weight: 600; font-size: 14px; }
+.vsm-opciones button small { font-size: 11px; color: var(--suave); }
+.vsm-opciones button:hover { background: #2E2016; transform: none; }
+.vsm-opciones button[aria-pressed="true"] { border-color: #7FA86E; background: rgba(127,168,110,0.16); box-shadow: inset 0 0 0 1px #7FA86E; }
+.vsm-record { margin: 0; font-size: 13px; color: var(--suave); text-align: center; }
+.vsm-nota { margin: 0; font-size: 12px; color: #8F7C63; text-align: center; line-height: 1.5; }
+.fila.maquina, .izq-fila.maquina { background: linear-gradient(90deg, rgba(127,168,110,0.12), transparent 70%); }
+.ficha.robot { background: #2E3B2A; }
+.pensando { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+.pensando i { width: 5px; height: 5px; border-radius: 50%; background: var(--laton-claro); animation: pensar 1s ease-in-out infinite; }
+.pensando i:nth-child(2) { animation-delay: 0.15s; } .pensando i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes pensar { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+body.sin-reloj .reloj-caja { visibility: hidden; }
+
+/* ---------- Entrenador (modo didáctico) ---------- */
+.tablero { position: relative; }
+.flechas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transform: translateZ(2px); z-index: 3; overflow: visible; }
+.vsm-lecciones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.vsm-lecciones button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.16); background: #1F150E; color: var(--texto); text-align: left; }
+.vsm-lecciones button b { font-size: 13px; font-weight: 600; }
+.vsm-lecciones button small { font-size: 11px; color: var(--suave); }
+.vsm-lecciones button[aria-pressed="true"] { border-color: #6FA8DC; background: rgba(111,168,220,0.14); box-shadow: inset 0 0 0 1px #6FA8DC; }
+.vsm-entrenador { display: flex !important; flex-direction: row !important; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 12px; background: rgba(127,168,110,0.08); border: 1px solid rgba(127,168,110,0.3); cursor: pointer; }
+.vsm-entrenador input { width: 18px; height: 18px; margin-top: 2px; accent-color: #7FA86E; flex: none; }
+.vsm-entrenador span { display: flex; flex-direction: column; gap: 2px; }
+.vsm-entrenador b { font-size: 14px; }
+.vsm-entrenador small { font-size: 12px; color: var(--suave); line-height: 1.45; }
+.entrenador { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: radial-gradient(120% 80% at 0% 0%, rgba(111,168,220,0.12), transparent 60%), var(--panel); border: 1px solid rgba(111,168,220,0.35); box-shadow: var(--sombra-1); }
+.ent-cabeza { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ent-avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #24364A; font-size: 16px; }
+.ent-cabeza h2 { font-size: 18px; }
+.ent-apertura { margin-left: auto; padding: 3px 10px; border-radius: 999px; background: rgba(205,165,78,0.16); border: 1px solid rgba(205,165,78,0.45); color: var(--laton-claro); font-size: 12px; font-weight: 600; max-width: 100%; }
+.ent-tarjeta { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; background: #1F150E; border-left: 4px solid #6FA8DC; animation: subir 320ms var(--resorte) both; }
+.ent-tarjeta.mejor { border-left-color: #5FBF5A; }
+.ent-tarjeta.buena { border-left-color: #A9CB9A; }
+.ent-tarjeta.imprecision { border-left-color: #E2B33C; }
+.ent-tarjeta.error { border-left-color: #E07A50; }
+.ent-tarjeta.grave { border-left-color: #D9443A; }
+.ent-veredicto { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; letter-spacing: 0.02em; }
+.ent-tarjeta p { margin: 0; font-size: 14px; line-height: 1.55; color: #E2D3B8; }
+.ent-tarjeta p strong { color: var(--texto); }
+.ent-tarjeta .ent-paso { font-size: 12px; color: #9DC3E6; font-weight: 600; letter-spacing: 0.04em; }
+.ent-barra { height: 6px; border-radius: 3px; background: #2A1C13; overflow: hidden; display: flex; }
+.ent-barra i { display: block; height: 100%; background: #F2E6CF; transition: width 500ms var(--resorte); }
+.ent-eval { font-size: 12px; color: var(--suave); }
+.ent-respuesta { padding-top: 6px; border-top: 1px dashed rgba(233,220,195,0.14); }
+.ent-amenaza { padding: 8px 10px; border-radius: 10px; background: rgba(240,150,60,0.12); border: 1px solid rgba(240,150,60,0.45); color: #F5C08A; font-size: 13px; line-height: 1.5; }
+.ent-botones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ent-btn { height: 36px; border-radius: 10px; border: 1px solid rgba(233,220,195,0.18); background: transparent; color: var(--texto); font-size: 13px; }
+.ent-btn:hover { background: #3A281C; transform: none; }
+.ent-btn[aria-pressed="true"] { background: rgba(95,191,90,0.16); border-color: #5FBF5A; color: #BDE5B5; }
+.ent-btn:disabled { opacity: 0.45; cursor: default; }
+.ent-leyenda { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--suave); }
+.ent-leyenda span { display: inline-flex; align-items: center; gap: 4px; }
+.ent-leyenda i { width: 14px; height: 4px; border-radius: 2px; }
+.l-verde { background: #5FBF5A; } .l-amarillo { background: #E2C33C; } .l-rojo { background: #D9443A; } .l-naranja { background: #F0963C; } .l-azul { background: #6FA8DC; }
+.analizando { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 4px; }
+.analizando i { width: 4px; height: 4px; border-radius: 50%; background: #9DC3E6; animation: pensar 1s ease-in-out infinite; }
+.analizando i:nth-child(2) { animation-delay: 0.15s; } .analizando i:nth-child(3) { animation-delay: 0.3s; }
+body.enfoque .lateral > #entrenador { display: flex !important; }
+body.enfoque .ent-leyenda { display: none; }
+
+/* ---------- Temas de práctica y repaso ---------- */
+.ent-btn.ancho { grid-column: 1 / -1; }
+.ent-tema { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: rgba(111,168,220,0.12); border: 1px solid rgba(111,168,220,0.45); animation: subir 300ms var(--resorte) both; }
+.ent-tema-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; color: #9DC3E6; letter-spacing: 0.04em; }
+.ent-tema-cabeza button { border: 0; background: none; color: var(--suave); font-size: 12px; text-decoration: underline; padding: 0; }
+.ent-tema p { margin: 0; font-size: 14px; line-height: 1.5; color: #E2D3B8; }
+.ent-tema strong { color: #CFE3F5; }
+.ent-tema .btn-fila { align-self: flex-start; }
+.ent-lista-temas { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; padding: 10px; border-radius: 12px; background: #1F150E; border: 1px solid var(--linea); }
+.ent-lista-temas h3 { margin: 4px 0 0; font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; color: var(--suave); text-transform: uppercase; }
+.ent-lista-temas .temas-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ent-lista-temas button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 9px; border-radius: 9px; border: 1px solid rgba(233,220,195,0.14); background: #2A1C13; color: var(--texto); text-align: left; }
+.ent-lista-temas button b { font-size: 12px; font-weight: 600; }
+.ent-lista-temas button small { font-size: 10px; color: var(--suave); }
+.ent-lista-temas button:hover { border-color: #6FA8DC; transform: none; }
+.ent-lista-temas button[aria-pressed="true"] { border-color: #6FA8DC; background: rgba(111,168,220,0.16); }
+.ent-repaso { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.ent-repaso button { width: 36px; height: 32px; border-radius: 8px; border: 1px solid rgba(233,220,195,0.18); background: transparent; color: var(--texto); font-size: 13px; }
+.ent-repaso button:hover { background: #3A281C; transform: none; }
+.ent-repaso button:disabled { opacity: 0.35; cursor: default; }
+.ent-repaso span { min-width: 110px; text-align: center; font-size: 12px; color: var(--suave); font-variant-numeric: tabular-nums; }
+.ent-repaso.activo span { color: #9DC3E6; font-weight: 700; }
+#jugadas.navegable li span:nth-child(n+2) { cursor: pointer; border-radius: 4px; padding: 0 3px; }
+#jugadas.navegable li span:nth-child(n+2):hover { background: #3A281C; }
+#jugadas li span.vista { background: rgba(111,168,220,0.25); color: #CFE3F5; }
+.escena.repaso .marco { box-shadow: 0 0 0 3px rgba(111,168,220,0.7); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -909,6 +1008,30 @@ body.enfoque .inicio-flotante { display: grid; }
         </div>
       </div>
       <aside class="lateral">
+        <section id="entrenador" class="entrenador oculto" aria-live="polite" aria-labelledby="ent-titulo">
+          <div class="ent-cabeza">
+            <span class="ent-avatar" aria-hidden="true">🎓</span>
+            <h2 id="ent-titulo">Entrenador</h2>
+            <span class="ent-apertura oculto" id="ent-apertura"></span>
+          </div>
+          <div id="ent-tema" class="ent-tema oculto"></div>
+          <div id="ent-tarjeta" class="ent-tarjeta"></div>
+          <div id="ent-amenaza" class="ent-amenaza oculto"></div>
+          <div class="ent-botones">
+            <button type="button" class="ent-btn" id="ent-pistas" aria-pressed="false">💡 Ver mejores jugadas</button>
+            <button type="button" class="ent-btn" id="ent-deshacer">↶ Deshacer</button>
+            <button type="button" class="ent-btn ancho" id="ent-temas" aria-expanded="false">📋 Practicar un tema</button>
+          </div>
+          <div id="ent-lista-temas" class="ent-lista-temas oculto"></div>
+          <div class="ent-repaso" aria-label="Repasar jugadas">
+            <button type="button" id="rep-inicio" aria-label="Ir al inicio">⏮</button>
+            <button type="button" id="rep-atras" aria-label="Jugada anterior">◀</button>
+            <span id="rep-pos">En vivo</span>
+            <button type="button" id="rep-adelante" aria-label="Jugada siguiente">▶</button>
+            <button type="button" id="rep-fin" aria-label="Volver a la posición actual">⏭</button>
+          </div>
+          <div class="ent-leyenda"><span><i class="l-verde"></i>Mejor</span><span><i class="l-amarillo"></i>Buena opción</span><span><i class="l-rojo"></i>Tu error</span><span><i class="l-naranja"></i>Amenaza</span><span><i class="l-azul"></i>Lección</span></div>
+        </section>
         <div id="video" class="video oculto" aria-label="Cámaras">
           <div class="video-rival">
             <video id="video-rival" autoplay playsinline></video>
@@ -1096,6 +1219,49 @@ body.enfoque .inicio-flotante { display: grid; }
   </button>
 </div>
 <button type="button" class="inicio-flotante" id="ir-inicio-2" aria-label="Regresar al inicio del club" title="Inicio"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg></button>
+<div id="vs-maquina" class="ajustes oculto" role="dialog" aria-modal="true" aria-labelledby="vsm-titulo">
+  <div class="ajustes-tarjeta vsm-tarjeta">
+    <div class="ajustes-cabeza"><h2 id="vsm-titulo">Jugar contra la Máquina</h2><button type="button" class="cerrar-x" id="vsm-cerrar" aria-label="Cerrar">×</button></div>
+    <div class="vsm-grupo">
+      <span class="vsm-etiqueta">Modo</span>
+      <div class="vsm-opciones" id="vsm-modo">
+        <button type="button" data-modo="libre" aria-pressed="true"><b>Partida libre</b><small>Tú eliges todo</small></button>
+        <button type="button" data-modo="leccion" aria-pressed="false"><b>Lección guiada</b><small>Una apertura paso a paso</small></button>
+      </div>
+      <div id="vsm-lecciones" class="vsm-lecciones oculto"></div>
+      <label class="vsm-entrenador"><input type="checkbox" id="vsm-entrenador" checked><span><b>Entrenador activado</b><small>Te explica cada jugada, marca tus aciertos y errores con flechas y te dice qué apertura juegas.</small></span></label>
+    </div>
+    <div class="vsm-grupo" id="vsm-grupo-nivel">
+      <span class="vsm-etiqueta">Nivel</span>
+      <div class="vsm-opciones" id="vsm-nivel">
+        <button type="button" data-nivel="facil" aria-pressed="false"><b>Nivel 1</b><small>Fácil · para calentar</small></button>
+        <button type="button" data-nivel="medio" aria-pressed="true"><b>Nivel 2</b><small>Medio · juego de club</small></button>
+        <button type="button" data-nivel="dificil" aria-pressed="false"><b>Nivel 3</b><small>Difícil · te va a costar</small></button>
+        <button type="button" data-nivel="maestro" aria-pressed="false"><b>Nivel 4</b><small>Maestro · sin piedad</small></button>
+      </div>
+    </div>
+    <div class="vsm-grupo" id="vsm-grupo-color">
+      <span class="vsm-etiqueta">Tus piezas</span>
+      <div class="vsm-opciones tres" id="vsm-color">
+        <button type="button" data-color="w" aria-pressed="true"><b>Blancas</b></button>
+        <button type="button" data-color="b" aria-pressed="false"><b>Negras</b></button>
+        <button type="button" data-color="azar" aria-pressed="false"><b>Al azar</b></button>
+      </div>
+    </div>
+    <div class="vsm-grupo">
+      <span class="vsm-etiqueta">Reloj</span>
+      <div class="vsm-opciones cuatro" id="vsm-tiempo">
+        <button type="button" data-min="0" aria-pressed="true"><b>Sin reloj</b></button>
+        <button type="button" data-min="5" aria-pressed="false"><b>5 min</b></button>
+        <button type="button" data-min="10" aria-pressed="false"><b>10 min</b></button>
+        <button type="button" data-min="15" aria-pressed="false"><b>15 min</b></button>
+      </div>
+    </div>
+    <p class="vsm-record" id="vsm-record"></p>
+    <button type="button" class="primario" id="vsm-empezar">Empezar partida</button>
+    <p class="vsm-nota">Es práctica: no cuenta en la mesa del club y no te marca como ocupado para tus amigos.</p>
+  </div>
+</div>
 <div id="salida" class="ajustes oculto" role="dialog" aria-modal="true" aria-labelledby="salida-titulo">
   <div class="ajustes-tarjeta salida-tarjeta">
     <h2 id="salida-titulo">¿Regresar al inicio?</h2>
