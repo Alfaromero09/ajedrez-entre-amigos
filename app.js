@@ -1079,6 +1079,11 @@ function iniciarMotor() {
 // Un solo motor, una tarea a la vez (jugar o analizar)
 let colaMotor = Promise.resolve();
 function enCola(tarea) { const p = colaMotor.then(tarea, tarea); colaMotor = p.catch(() => {}); return p; }
+// Si el motor no responde a tiempo, se le pide parar y se sigue sin él
+function conLimite(promesa, ms) {
+  let t;
+  return Promise.race([promesa, new Promise((_, falla) => { t = setTimeout(() => { motor?.postMessage("stop"); falla(new Error("motor lento")); }, ms); })]).finally(() => clearTimeout(t));
+}
 async function jugadaMotor(fen, nivel) {
   const n = NIVELES[nivel] || NIVELES.medio;
   // En fácil, a veces juega una jugada cualquiera para ser más humano
@@ -1087,8 +1092,8 @@ async function jugadaMotor(fen, nivel) {
     const m = opciones[Math.floor(Math.random() * opciones.length)];
     return m ? m.from + m.to + (m.promotion || "") : null;
   }
-  await iniciarMotor();
-  return enCola(() => new Promise((listo) => {
+  await conLimite(iniciarMotor(), 15000);
+  return enCola(() => conLimite(new Promise((listo) => {
     const escuchar = (e) => {
       const t = String(e.data);
       if (t.startsWith("bestmove")) { motor.removeEventListener("message", escuchar); listo(t.split(" ")[1]); }
@@ -1098,13 +1103,13 @@ async function jugadaMotor(fen, nivel) {
     motor.postMessage(`setoption name Skill Level value ${n.habilidad}`);
     motor.postMessage(`position fen ${fen}`);
     motor.postMessage(`go depth ${n.profundidad} movetime ${n.ms}`);
-  }));
+  }), n.ms + 6000));
 }
 
 // Análisis a toda fuerza: las mejores líneas con su evaluación (desde el lado que mueve)
 async function analizar(fen, lineas = 3, ms = 700) {
-  await iniciarMotor();
-  return enCola(() => new Promise((listo) => {
+  await conLimite(iniciarMotor(), 15000);
+  return enCola(() => conLimite(new Promise((listo) => {
     const res = {};
     const escuchar = (e) => {
       const t = String(e.data);
@@ -1123,7 +1128,7 @@ async function analizar(fen, lineas = 3, ms = 700) {
     motor.postMessage(`setoption name MultiPV value ${lineas}`);
     motor.postMessage(`position fen ${fen}`);
     motor.postMessage(`go depth 14 movetime ${ms}`);
-  }));
+  }), ms + 6000));
 }
 const valorDe = (l) => (l.mate != null ? (l.mate > 0 ? 10000 - l.mate * 10 : -10000 - l.mate * 10) : l.cp ?? 0);
 
@@ -1194,7 +1199,8 @@ function empezarLocal(cfg) {
     estado: "jugando", fen: new Chess().fen(), jugadas: [], resultado: null, motivo: null,
     reloj_blancas: ms, reloj_negras: ms, ultimo_tick: new Date(ahoraServidor()).toISOString(),
     version: 1, actualizada: new Date().toISOString(),
-    didactico: !!cfg.didactico, leccion: leccion ? leccion.id : null, ayudas: 0, tema: cfg.tema || null,
+    didactico: !!cfg.didactico, leccion: leccion ? leccion.id : null, ayudas: 0,
+    tema: cfg.tema || (leccion && TEMAS.some((t) => t.id === leccion.id) ? leccion.id : null),
   };
   flechas = []; analisisTurno = null; ultimaApertura = null; pistasVisibles = false; vistaIndice = null;
   $("ent-pistas").setAttribute("aria-pressed", "false");
@@ -1204,7 +1210,7 @@ function empezarLocal(cfg) {
   motor?.postMessage("ucinewgame");
   history.pushState(null, "", `?p=${MAQUINA}`);
   abrirLocal(true);
-  if (leccion) reproducirLeccion(leccion);
+  if (leccion) tarjeta("", `<span class="ent-paso">LECCIÓN · ${esc(leccion.nivel.toUpperCase())}</span><span class="ent-veredicto">${esc(leccion.nombre)}</span><p>${esc(leccion.intro)}</p><p>Tú mueves tus piezas: la <strong style="color:#9DC3E6">flecha azul</strong> te dice qué jugada toca y por qué, pero puedes jugar lo que quieras. La Máquina responde con la línea de la lección.</p>`);
   else if (partida.didactico) tarjeta("", `<span class="ent-veredicto">🎓 Entrenador listo</span><p>Juega con calma: después de cada jugada te digo si fue buena o no, con flechas. Si te equivocas, puedes <strong>deshacer</strong>.</p>`);
 }
 
@@ -1230,7 +1236,7 @@ function abrirLocal(recien) {
   pintarLineaPartida();
   dibujar();
   if (!recien && partida.didactico) { flechas = []; tarjeta("", `<span class="ent-veredicto">🎓 Seguimos</span><p>Retomamos tu partida. ${partida.estado === "jugando" ? "Te toca pensar tu jugada." : ""}</p>`); pintarApertura(); entrenadorTuTurno(); }
-  if (!(recien && partida.leccion)) turnoMaquina();
+  turnoMaquina();
 }
 
 function ajustarVistaLocal(color, turno) {
@@ -1332,11 +1338,58 @@ function porQueJugada(fen, uci) {
   if (!ideas.length) ideas.push("mejora la posición de tus piezas");
   return ideas.join(" y ");
 }
+// Qué tipo de apertura es, en palabras
+function tipoApertura(nombre) {
+  if (/Gambito|Contragambito/.test(nombre)) return { tipo: "Gambito", explica: "sacrificas un peón para ganar tiempo, centro o iniciativa" };
+  if (/^Ataque/.test(nombre)) return { tipo: "Ataque", explica: "un plan agresivo para atacar desde el principio" };
+  if (/^Sistema/.test(nombre)) return { tipo: "Sistema", explica: "un esquema que se juega casi igual contra todo" };
+  if (/^(Defensa|Siciliana|Francesa|Caro-Kann)/.test(nombre)) return { tipo: "Defensa", explica: "la respuesta de las negras para pelear por el centro" };
+  if (/trampa|Mate/i.test(nombre)) return { tipo: "Trampa", explica: "una celada que funciona si el rival se descuida" };
+  return { tipo: "Apertura", explica: "el plan inicial de las blancas para tomar la iniciativa" };
+}
+// Clasifica una jugada: ataque, defensa, desarrollo, centro, enroque, captura…
+const VALOR_PIEZA = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
+const NOMBRE_PIEZA = { p: "peón", n: "caballo", b: "alfil", r: "torre", q: "dama", k: "rey" };
+function tiposJugada(fen, uci) {
+  const antes = new Chess(fen);
+  const yoC = antes.turn(), rival = yoC === "w" ? "b" : "w";
+  const enPeligro = (c, color) => c.board().flat().filter((p) => p && p.color === color && p.type !== "k" &&
+    c.attackers(p.square, color === "w" ? "b" : "w").length && !c.attackers(p.square, color).length).map((p) => p.square);
+  let peligroAntes = []; try { peligroAntes = enPeligro(antes, yoC); } catch {}
+  const c = new Chess(fen);
+  let m; try { m = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" }); } catch { return []; }
+  const t = [];
+  if (m.flags.includes("k") || m.flags.includes("q")) t.push({ i: "🏰", tipo: "Enroque", texto: "pone a salvo al rey" });
+  if (m.captured) t.push({ i: "⚔️", tipo: "Captura", texto: `gana ${m.captured === "p" ? "un peón" : "un " + NOMBRE_PIEZA[m.captured]}` });
+  if (c.inCheck()) t.push({ i: "👑", tipo: "Ataque al rey", texto: "da jaque" });
+  // ¿Qué ataca la pieza que se movió?
+  try {
+    const blancos = c.board().flat().filter((p) => p && p.color === rival && p.type !== "k" && c.attackers(p.square, yoC).includes(m.to))
+      .sort((a, b) => VALOR_PIEZA[b.type] - VALOR_PIEZA[a.type]);
+    const b = blancos[0];
+    if (b && !c.inCheck() && (VALOR_PIEZA[b.type] > VALOR_PIEZA[m.piece] || !c.attackers(b.square, rival).length))
+      t.push({ i: "🎯", tipo: "Ataque", texto: `amenaza el ${NOMBRE_PIEZA[b.type]} de ${b.square}` });
+  } catch {}
+  // ¿Protege algo que estaba en peligro?
+  try {
+    const salvadas = peligroAntes.filter((sq) => sq === m.from || (c.get(sq) && c.attackers(sq, yoC).length));
+    if (salvadas.length) {
+      const sq = salvadas[0], p = sq === m.from ? m.piece : c.get(sq).type;
+      t.push({ i: "🛡️", tipo: "Defensa", texto: sq === m.from ? `pone a salvo el ${NOMBRE_PIEZA[p]} que estaba atacado` : `protege el ${NOMBRE_PIEZA[p]} de ${sq}` });
+    }
+  } catch {}
+  const atras = (m.color === "w" && m.from[1] === "1") || (m.color === "b" && m.from[1] === "8");
+  if (!m.captured && (m.piece === "n" || m.piece === "b") && atras) t.push({ i: "♞", tipo: "Desarrollo", texto: `saca el ${NOMBRE_PIEZA[m.piece]} a jugar` });
+  if (m.piece === "p" && ["d4", "e4", "d5", "e5", "c4", "c5", "f4", "f5"].includes(m.to)) t.push({ i: "⬛", tipo: "Centro", texto: "pelea por el centro" });
+  if (!t.length) t.push({ i: "↗️", tipo: "Maniobra", texto: "reacomoda una pieza" });
+  return t;
+}
+const chipsTipo = (fen, uci) => `<div class="ent-tipos">${tiposJugada(fen, uci).map((x) => `<span title="${esc(x.texto)}">${x.i} ${esc(x.tipo)}</span>`).join("")}</div>`;
 function apertura(jugadas) {
   const sec = jugadas.map((j) => limpiaSan(j.san)).join(" ");
   let mejor = null;
   for (const [nombre, movs, idea] of APERTURAS) {
-    if ((sec + " ").startsWith(movs + " ") || sec === movs) { if (!mejor || movs.length > mejor.movs.length) mejor = { nombre, movs, idea }; }
+    if ((sec + " ").startsWith(movs + " ") || sec === movs) { if (!mejor || movs.length > mejor.movs.length) mejor = { nombre, movs, idea, ...tipoApertura(nombre) }; }
   }
   return mejor;
 }
@@ -1367,7 +1420,8 @@ function pintarApertura() {
   const chip = $("ent-apertura");
   chip.classList.toggle("oculto", !a);
   if (!a) return null;
-  chip.textContent = `📖 ${a.nombre}`;
+  chip.textContent = `📖 ${a.nombre} · ${a.tipo}`;
+  chip.title = `${a.tipo}: ${a.explica}`;
   const nueva = a.nombre !== ultimaApertura;
   ultimaApertura = a.nombre;
   return nueva ? a : null;
@@ -1401,8 +1455,9 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
   if (!miJugada) {
     // Jugó la Máquina: explica y busca amenazas
     flechas = [];
-    const extra = nueva ? `<p>📖 <strong>${esc(nueva.nombre)}</strong>: ${esc(nueva.idea)}</p>` : "";
-    const linea = `<p class="ent-respuesta">🤖 La Máquina respondió <strong>${esc(sanEs(m?.san))}</strong>: ${esc(porQueJugada(fenAntes, uci))}.</p>${extra}`;
+    const extra = nueva ? `<p>📖 <strong>${esc(nueva.nombre)}</strong> <em class="ent-tipo">${esc(nueva.tipo)}: ${esc(nueva.explica)}</em>. ${esc(nueva.idea)}</p>` : "";
+    const narra = textoLeccion(partida.jugadas.length - 1, m?.san);
+    const linea = `<p class="ent-respuesta">🤖 La Máquina respondió <strong>${esc(sanEs(m?.san))}</strong>: ${esc(narra || porQueJugada(fenAntes, uci))}.</p>${chipsTipo(fenAntes, uci)}${extra}`;
     // Tu veredicto se queda a la vista; la respuesta de la Máquina se agrega abajo
     if ($("ent-tarjeta").dataset.tipo === "veredicto") $("ent-tarjeta").insertAdjacentHTML("beforeend", linea);
     else tarjeta("", linea);
@@ -1436,12 +1491,14 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
     flechas = [];
     const sanMejor = mejor && uciASan(fenAntes, mejor.uci);
     let html = `<span class="ent-veredicto">${titulo}</span>`;
-    html += `<p>Jugaste <strong>${esc(sanEs(m?.san))}</strong>: ${esc(porQueJugada(fenAntes, uci))}.</p>`;
+    html += `<p>Jugaste <strong>${esc(sanEs(m?.san))}</strong>: ${esc(porQueJugada(fenAntes, uci))}.</p>${chipsTipo(fenAntes, uci)}`;
     if (!fueLaMejor && sanMejor) {
       html += `<p>${clase === "buena" ? "También estaba" : "Mejor era"} <strong style="color:#8FD88A">${esc(sanEs(sanMejor.san))}</strong> (flecha verde): ${esc(porQueJugada(fenAntes, mejor.uci))}.${perdida > 70 ? ` Te costó unos ${(perdida / 100).toFixed(1)} peones de ventaja.` : ""}</p>`;
       flechas.push({ de: mejor.uci.slice(0, 2), a: mejor.uci.slice(2, 4), color: "verde" });
       if (clase !== "buena") flechas.push({ de: uci.slice(0, 2), a: uci.slice(2, 4), color: "rojo" });
     }
+    const narraMia = textoLeccion(partida.jugadas.length - 1, m?.san);
+    if (narraMia) html += `<p>📚 ${esc(narraMia)}</p>`;
     if (guiaPrevia?.m && !guiaPrevia.fin) {
       const siguio = guiaPrevia.m.from + guiaPrevia.m.to === uci.slice(0, 4);
       html += siguio
@@ -1450,13 +1507,13 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
     }
     const consejo = m ? consejoPrincipio(fenAntes, m, partida.jugadas) : "";
     if (consejo) html += `<p>${esc(consejo)}</p>`;
-    if (nueva) html += `<p>📖 <strong>${esc(nueva.nombre)}</strong>: ${esc(nueva.idea)}</p>`;
+    if (nueva) html += `<p>📖 <strong>${esc(nueva.nombre)}</strong> <em class="ent-tipo">${esc(nueva.tipo)}: ${esc(nueva.explica)}</em>. ${esc(nueva.idea)}</p>`;
     const ventaja = Math.max(-1000, Math.min(1000, valorDespues));
     html += `<div class="ent-barra" title="Balance de la posición"><i style="width:${50 + ventaja / 20}%"></i></div><span class="ent-eval">${textoEval(valorDespues)}</span>`;
     tarjeta(clase, html, "veredicto");
     pintarFlechas();
     if (["error", "grave"].includes(clase)) sonido("tiempo");
-  } catch { tarjeta("", "<p>No pude analizar esta jugada.</p>"); }
+  } catch (e) { console.warn("Entrenador:", e); tarjeta("", "<p>No pude analizar esta jugada. Sigue jugando; en la siguiente lo intento de nuevo.</p>"); }
   ocupadoEntrenador = false;
   $("ent-deshacer").disabled = false;
   if (partida.estado === "terminada") return contarLocal();
@@ -1523,7 +1580,7 @@ function pintarTema() {
   caja.classList.toggle("oculto", !t);
   guiaActual = null;
   if (!t) return;
-  const cabeza = `<div class="ent-tema-cabeza"><span>🎯 PRACTICANDO: ${esc(t.nombre.toUpperCase())}</span><button type="button" id="tema-quitar">Quitar</button></div>`;
+  const cabeza = `<div class="ent-tema-cabeza"><span>🎯 PRACTICANDO: ${esc(t.nombre.toUpperCase())}${t.tipo ? ` · ${esc(t.tipo.toUpperCase())}` : ""}</span><button type="button" id="tema-quitar">Quitar</button></div>`;
   if (t.color !== miColor()) {
     caja.innerHTML = cabeza + `<p>Este tema se juega con <strong>${t.color === "w" ? "blancas" : "negras"}</strong> y en esta partida llevas ${miColor() === "w" ? "blancas" : "negras"}.</p><button type="button" class="btn-fila dorado" id="tema-nueva">Empezar partida con este tema</button>`;
     return;
@@ -1543,7 +1600,7 @@ document.addEventListener("click", (e) => {
 function pintarListaTemas() {
   const grupos = [...new Set(TEMAS.map((t) => t.grupo))];
   $("ent-lista-temas").innerHTML = grupos.map((g) => `<h3>${esc(g)}</h3><div class="temas-grid">` +
-    TEMAS.filter((t) => t.grupo === g).map((t) => `<button type="button" data-tema="${t.id}" aria-pressed="${partida?.tema === t.id}"><b>${esc(t.nombre)}</b><small>Con ${t.color === "w" ? "blancas" : "negras"}</small></button>`).join("") + "</div>").join("");
+    TEMAS.filter((t) => t.grupo === g).map((t) => `<button type="button" data-tema="${t.id}" aria-pressed="${partida?.tema === t.id}"><b>${esc(t.nombre)}</b><small>${esc(t.tipo || "")} · con ${t.color === "w" ? "blancas" : "negras"}</small></button>`).join("") + "</div>").join("");
 }
 $("ent-temas").addEventListener("click", () => {
   const abrir = $("ent-lista-temas").classList.contains("oculto");
@@ -1580,12 +1637,27 @@ function pintarRepaso() {
   document.querySelector(".escena").classList.toggle("repaso", vistaIndice !== null);
   $("rep-inicio").disabled = $("rep-atras").disabled = n === 0;
   $("rep-adelante").disabled = $("rep-fin").disabled = vistaIndice === null;
+  $("rep-jugar").classList.toggle("oculto", vistaIndice === null);
   if (vistaIndice !== null) $("estado").textContent = "Estás repasando la partida. Toca ⏭ para volver y seguir jugando.";
 }
 $("rep-inicio").addEventListener("click", () => irA(0));
 $("rep-atras").addEventListener("click", () => irA((vistaIndice ?? partida.jugadas.length) - 1));
 $("rep-adelante").addEventListener("click", () => irA((vistaIndice ?? partida.jugadas.length) + 1));
 $("rep-fin").addEventListener("click", () => irA(null));
+// Jugar desde aquí: la partida continúa desde la posición que estás repasando
+$("rep-jugar").addEventListener("click", () => {
+  if (vistaIndice === null || pensandoMaquina || ocupadoEntrenador) return;
+  const nuevas = partida.jugadas.slice(0, vistaIndice);
+  const c = juegoEn(vistaIndice);
+  partida = { ...partida, fen: c.fen(), jugadas: nuevas, estado: "jugando", resultado: null, motivo: null, version: partida.version + 1,
+    ultimo_tick: new Date(ahoraServidor()).toISOString(), ayudas: (partida.ayudas || 0) + 1 };
+  vistaIndice = null; flechas = []; analisisTurno = null;
+  guardarLocal();
+  cerrarFinal?.();
+  dibujar();
+  tarjeta("", `<span class="ent-veredicto">▶ Seguimos desde aquí</span><p>La partida continúa desde la jugada ${Math.ceil(nuevas.length / 2) || 1}. ${c.turn() === miColor() ? "Te toca mover." : "Ahora mueve la Máquina."}</p>`);
+  if (c.turn() === miColor()) entrenadorTuTurno(); else turnoMaquina();
+});
 $("jugadas").addEventListener("click", (e) => { const s = e.target.closest("[data-ir]"); if (s && partida?.local) irA(Number(s.dataset.ir)); });
 document.addEventListener("keydown", (e) => {
   if (!partida?.local || $("partida").classList.contains("oculto") || e.target.closest("input, textarea")) return;
@@ -1633,7 +1705,7 @@ $("ent-deshacer").addEventListener("click", () => {
   const reponer = (lista) => { const c = new Chess(); lista.forEach((j) => c.move(j.san)); return c; };
   let quitar = 0;
   // Quita hasta que vuelva a ser tu turno, sin pasar del inicio de la lección
-  const minimo = partida.leccion ? (LECCIONES.find((l) => l.id === partida.leccion)?.pasos.length || 0) : 0;
+  const minimo = 0;
   do { quitar++; } while (jug.length - quitar > minimo && reponer(jug.slice(0, jug.length - quitar)).turn() !== miColorAhora);
   if (jug.length - quitar < minimo) return avisar("Ya estás al inicio de la lección.");
   const nuevas = jug.slice(0, jug.length - quitar);
@@ -1684,6 +1756,14 @@ async function reproducirLeccion(leccion) {
   const a = apertura(partida.jugadas);
   tarjeta("mejor", `<span class="ent-veredicto">🎯 ¡Ahora tú!</span><p>${esc(leccion.cierre)}</p>${a ? `<p>📖 <strong>${esc(a.nombre)}</strong>: ${esc(a.idea)}</p>` : ""}<p>Desde aquí la partida sigue contra la Máquina y yo te voy comentando.</p>`);
   entrenadorTuTurno();
+}
+// Texto de la lección para la jugada número i (si coincide con la lección)
+function textoLeccion(i, san) {
+  const l = partida?.leccion ? LECCIONES.find((x) => x.id === partida.leccion) : null;
+  if (!l || !l.pasos[i] || limpiaSan(l.pasos[i][0]) !== limpiaSan(san || "")) return "";
+  const enCamino = partida.jugadas.slice(0, i + 1).every((j, k) => l.pasos[k] && limpiaSan(l.pasos[k][0]) === limpiaSan(j.san));
+  if (!enCamino) return "";
+  return l.pasos[i][1] + (i === l.pasos.length - 1 ? ` — ${l.cierre}` : "");
 }
 function uciDeSan(fen, san) { try { const m = new Chess(fen).move(san); return m.from + m.to; } catch { return null; } }
 
@@ -2144,6 +2224,11 @@ function dibujar() {
 }
 
 function tocar(casilla, juego, puedoMover, color) {
+  // Si estabas repasando, tocar el tablero te regresa a la partida para seguir jugando
+  if (partida?.local && vistaIndice !== null) {
+    irA(null);
+    return avisar("Volviste a la posición actual: ya puedes mover. Para jugar desde una posición anterior usa «Jugar desde aquí».");
+  }
   if (!puedoMover) return;
   if (elegida && destinos().includes(casilla)) {
     const desde = elegida;
