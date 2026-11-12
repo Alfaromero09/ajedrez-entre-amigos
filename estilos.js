@@ -6,11 +6,12 @@ export const TABLEROS = {
   nogal:   { nombre: "Nogal",   clara: "#E9DCC3", oscura: "#8A5E3C", marcaClara: "#E3C77E", marcaOscura: "#B28A3E", marco: "#4A2F1C" },
   marmol:  { nombre: "Mármol",  clara: "#E8E4DA", oscura: "#5E7A6E", marcaClara: "#DCCB8E", marcaOscura: "#8C9A63", marco: "#2F3E38" },
   clasico: { nombre: "Clásico", clara: "linear-gradient(135deg, #FFFFFF, #E4E4DF 55%, #F6F6F2)", oscura: "linear-gradient(135deg, #2B2B2B, #0D0D0D 60%, #242424)", marcaClara: "#E6DCA0", marcaOscura: "#4F4822", marco: "linear-gradient(160deg, #7A2416, #4A120A)" },
+  azul:    { nombre: "Azul", clara: "#F3F2EC", oscura: "#5E8FB5", marcaClara: "#F2E08A", marcaOscura: "#C9B451", marco: "#121820" },
   artico:  { nombre: "Ártico",  clara: "linear-gradient(135deg, #F8FCFF, #DCEBF4 50%, #EEF7FC 75%, #E2EFF7)", oscura: "linear-gradient(135deg, #A3C6DB, #6E99B6 55%, #8FB6CE 80%, #7AA3BF)", marcaClara: "#C9F0F4", marcaOscura: "#4FAFC2", marco: "linear-gradient(160deg, #D6E8F3, #8DB3CB 45%, #5C84A0)" },
 };
 
 export const PIEZAS = {
-  ilustradas: "Ilustradas", tresd: "3D", rhosgfx: "RhosGFX", "render-marmol": "Render mármol",
+  caricatura: "Caricatura", ilustradas: "Ilustradas", tresd: "3D", rhosgfx: "RhosGFX", "render-marmol": "Render mármol",
   "render-madera": "Render madera", geometricas: "Geométricas", simbolos: "Símbolos",
 };
 
@@ -38,8 +39,50 @@ export const DEFS_3D = '<svg aria-hidden="true" width="0" height="0" style="posi
   '<linearGradient id="p3w" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7D8287"/><stop offset="0.3" stop-color="#FFFFFF"/><stop offset="0.55" stop-color="#D7DADD"/><stop offset="1" stop-color="#6A6F74"/></linearGradient>' +
   '<linearGradient id="p3b" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000000"/><stop offset="0.3" stop-color="#5C6166"/><stop offset="0.55" stop-color="#1E2023"/><stop offset="1" stop-color="#000000"/></linearGradient></defs></svg>';
 
+// Piezas "Caricatura": trazo grueso, formas redondeadas, sombra lateral y brillo (diseño propio)
+function caricatura(tipo, color) {
+  const w = color === "w";
+  const f = w ? "#F8F7F2" : "#40444B";      // relleno
+  const s = w ? "#D9D6CC" : "#2A2D33";      // sombra lateral
+  const b = w ? "#FFFFFF" : "#6A707A";      // brillo
+  const t = "#1F2125";                      // trazo
+  const g = `stroke="${t}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"`;
+  const base = `<path d="M8 44.5 h24 a2.5 2.5 0 0 1 2.5 2.5 v0.5 h-29 v-0.5 a2.5 2.5 0 0 1 2.5 -2.5z" fill="${f}" ${g}/>`;
+  const pie = (y1) => `<path d="M11 ${y1} h18 l2 5.5 h-22z" fill="${f}" ${g}/>`;
+  const piezas = {
+    p: `<circle cx="20" cy="16" r="6.2" fill="${f}" ${g}/><path d="M23.5 13 a3 3 0 0 0 -3 -2" stroke="${b}" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <path d="M14 24 q6 -3.5 12 0 l1.5 3 h-15z" fill="${f}" ${g}/><path d="M13.5 27 q6.5 5 13 0 l2.5 12 h-18z" fill="${f}" ${g}/>
+        <path d="M24 30 l2 9 h3 l-2.5 -11z" fill="${s}"/>${pie(39)}${base}`,
+    r: `<path d="M11 8 h4 v3.5 h3.5 v-3.5 h3 v3.5 h3.5 v-3.5 h4 v7.5 l-2.5 2.5 h-13 l-2.5 -2.5z" fill="${f}" ${g}/>
+        <path d="M13.5 18 h13 l1.5 20 h-16z" fill="${f}" ${g}/><path d="M24 18.5 h2.5 l1.5 19 h-2.6z" fill="${s}"/>
+        <path d="M14.5 22 v13" stroke="${b}" stroke-width="2" stroke-linecap="round"/>${pie(38.5)}${base}`,
+    n: `<path d="M13 39 c-1 -7 2 -11 6 -14 c-4 1 -7 3 -9 1 c-2 -2 0 -5 2 -7 c3 -3 5 -6 6 -10 l2 3 c6 0 11 6 11 15 c0 5 -1 9 -1.5 12z" fill="${f}" ${g}/>
+        <path d="M24.5 13 c4 3 6 8 5.5 15 c-0.3 4 -1 8 -1.5 11 h-2.5 c1 -5 1.5 -10 0 -16z" fill="${s}"/>
+        <circle cx="18.6" cy="15.8" r="1.4" fill="${t}"/><path d="M12 22 l1.5 0.5" stroke="${t}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M16 12 c1.5 -1.5 2.5 -3 3 -4.5" stroke="${b}" stroke-width="1.8" fill="none" stroke-linecap="round"/>${pie(39)}${base}`,
+    b: `<circle cx="20" cy="6.5" r="2.4" fill="${f}" ${g}/>
+        <path d="M20 9 c-6 3 -8.5 9 -6.5 14 c1 2.5 3.5 3.5 6.5 3.5 s5.5 -1 6.5 -3.5 c2 -5 -0.5 -11 -6.5 -14z" fill="${f}" ${g}/>
+        <path d="M22.5 12.5 l-4.5 5" stroke="${t}" stroke-width="2" stroke-linecap="round"/>
+        <path d="M23 11.5 c3.5 3 4.5 7 3.2 11 c-0.7 2 -2.4 3 -4.2 3.4 c2 -4 2.4 -9 1 -14.4z" fill="${s}"/>
+        <path d="M14.5 27 h11 l2.5 11 h-16z" fill="${f}" ${g}/><path d="M23.8 27.5 h1.8 l2 10 h-2.3z" fill="${s}"/>${pie(38.5)}${base}`,
+    q: `<circle cx="9" cy="11" r="2.3" fill="${f}" ${g}/><circle cx="15" cy="7.5" r="2.3" fill="${f}" ${g}/><circle cx="20" cy="6" r="2.4" fill="${f}" ${g}/>
+        <circle cx="25" cy="7.5" r="2.3" fill="${f}" ${g}/><circle cx="31" cy="11" r="2.3" fill="${f}" ${g}/>
+        <path d="M9.5 13 l3.5 13 l2.5 -15 l4.5 14 l4.5 -14 l2.5 15 l3.5 -13 l-3 16 h-15z" fill="${f}" ${g}/>
+        <path d="M27 27 l-1 2.5 l2.5 -10z" fill="${s}"/><path d="M12.5 29 h15 l1.5 9.5 h-18z" fill="${f}" ${g}/>
+        <path d="M25 29.5 h2 l1.2 8.5 h-2.4z" fill="${s}"/><path d="M14 31.5 h12" stroke="${t}" stroke-width="1.6"/>${pie(38.5)}${base}`,
+    k: `<path d="M18.3 2.5 h3.4 v3 h3 v3.2 h-3 v3.5 h-3.4 v-3.5 h-3 v-3.2 h3z" fill="${f}" ${g}/>
+        <path d="M20 12 c-4 0 -11 1.5 -11 7.5 c0 4 3 7 4.5 8.5 h13 c1.5 -1.5 4.5 -4.5 4.5 -8.5 c0 -6 -7 -7.5 -11 -7.5z" fill="${f}" ${g}/>
+        <path d="M24.5 13 c3.5 1 6 3 6 6.5 c0 3.5 -2.5 6.2 -3.8 7.5 h-2.5 c2 -3 3 -8 0.3 -14z" fill="${s}"/>
+        <path d="M20 13 v14" stroke="${t}" stroke-width="1.8"/>
+        <path d="M13 28 h14 l1.5 10.5 h-17z" fill="${f}" ${g}/><path d="M24.8 28.5 h2 l1.3 9.5 h-2.4z" fill="${s}"/>
+        <path d="M14 31 h12" stroke="${t}" stroke-width="1.6"/>${pie(38.5)}${base}`,
+  };
+  return `<svg viewBox="0 0 40 50" role="img" aria-label="${{ p: "peón", n: "caballo", b: "alfil", r: "torre", q: "dama", k: "rey" }[tipo]} ${w ? "blanco" : "negro"}">${piezas[tipo]}</svg>`;
+}
+
 // Devuelve { clase, html, posicion } para dibujar una pieza con el estilo elegido
 export function pieza(estilo, tipo, color) {
+  if (estilo === "caricatura") return { clase: "pieza p-caricatura", html: caricatura(tipo, color) };
   const w = color === "w";
   if (estilo === "geometricas") {
     const c = { fill: w ? "#F4EFE6" : "#1F2A26", stroke: w ? "#2F3E38" : "#0B100E", dot: "#C9A24A" };

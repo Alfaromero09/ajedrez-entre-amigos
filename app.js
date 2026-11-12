@@ -2415,6 +2415,97 @@ function textoFinal() {
   return `${quien} ${porque}.`;
 }
 
+// ---------- Tomar y soltar piezas (arrastrar) ----------
+let suprimirClick = false;
+let arrastre = null;
+function casillaBajo(x, y) {
+  const el = document.elementsFromPoint(x, y).find((n) => n.classList?.contains("casilla"));
+  return el ? el.getAttribute("aria-label").slice(0, 2) : null;
+}
+function marcarSeleccion(desde) {
+  document.querySelectorAll("#tablero .casilla").forEach((b) => {
+    const sq = b.getAttribute("aria-label").slice(0, 2);
+    b.classList.toggle("elegida", sq === desde);
+    b.classList.toggle("destino", destinos().includes(sq));
+    b.classList.toggle("jugable", sq === desde || destinos().includes(sq) || b.classList.contains("jugable"));
+  });
+}
+function iniciarArrastre(e, btn, casilla, juego, color) {
+  if (e.button !== 0 || !e.isPrimary) return;
+  if (partida?.local && vistaIndice !== null) return;
+  e.preventDefault();
+  // Seleccionar la pieza (también sirve para el modo de dos clics)
+  const yaElegida = elegida === casilla;
+  elegida = casilla;
+  movimientos = juego.moves({ square: casilla, verbose: true });
+  marcarSeleccion(casilla);
+  const pieza = btn.querySelector(".pieza");
+  const ancho = btn.getBoundingClientRect().width;
+  const fantasma = document.createElement("div");
+  fantasma.className = "pieza-arrastre";
+  fantasma.style.width = `${Math.max(44, ancho * 0.95)}px`;
+  fantasma.innerHTML = pieza ? pieza.innerHTML : "";
+  if (pieza?.style.backgroundPosition) { fantasma.className += " " + pieza.className; fantasma.style.position = "fixed"; fantasma.style.aspectRatio = "1 / 1"; fantasma.style.backgroundPosition = pieza.style.backgroundPosition; }
+  fantasma.style.left = `${e.clientX}px`;
+  fantasma.style.top = `${e.clientY}px`;
+  fantasma.style.display = "none";
+  document.body.appendChild(fantasma);
+  arrastre = { desde: casilla, x0: e.clientX, y0: e.clientY, movio: false, fantasma, btn, color, yaElegida, sobre: null };
+  try { btn.setPointerCapture(e.pointerId); } catch {}
+  btn.addEventListener("pointermove", moverArrastre);
+  btn.addEventListener("pointerup", soltarArrastre, { once: true });
+  btn.addEventListener("pointercancel", cancelarArrastre, { once: true });
+}
+function moverArrastre(e) {
+  if (!arrastre) return;
+  const d = Math.hypot(e.clientX - arrastre.x0, e.clientY - arrastre.y0);
+  if (!arrastre.movio && d < 6) return;
+  if (!arrastre.movio) {
+    arrastre.movio = true;
+    arrastre.fantasma.style.display = "block";
+    arrastre.btn.classList.add("origen-arrastre");
+    document.body.classList.add("arrastrando");
+  }
+  arrastre.fantasma.style.left = `${e.clientX}px`;
+  arrastre.fantasma.style.top = `${e.clientY}px`;
+  const sq = casillaBajo(e.clientX, e.clientY);
+  if (sq !== arrastre.sobre) {
+    document.querySelectorAll("#tablero .casilla.sobre").forEach((b) => b.classList.remove("sobre"));
+    if (sq && destinos().includes(sq)) document.querySelector(`#tablero .casilla[aria-label^="${sq}"]`)?.classList.add("sobre");
+    arrastre.sobre = sq;
+  }
+}
+function limpiarArrastre() {
+  if (!arrastre) return;
+  arrastre.btn.removeEventListener("pointermove", moverArrastre);
+  arrastre.fantasma.remove();
+  arrastre.btn.classList.remove("origen-arrastre");
+  document.body.classList.remove("arrastrando");
+  document.querySelectorAll("#tablero .casilla.sobre").forEach((b) => b.classList.remove("sobre"));
+}
+function soltarArrastre(e) {
+  if (!arrastre) return;
+  const a = arrastre;
+  limpiarArrastre();
+  arrastre = null;
+  suprimirClick = true;                      // el clic que sigue al soltar ya se atendió aquí
+  setTimeout(() => { suprimirClick = false; }, 0);
+  if (!a.movio) {
+    // Fue un clic: si ya estaba elegida, se suelta la selección
+    if (a.yaElegida) { elegida = null; movimientos = []; }
+    return dibujar();
+  }
+  const hacia = casillaBajo(e.clientX, e.clientY);
+  if (hacia && hacia !== a.desde && destinos().includes(hacia)) {
+    const corona = movimientos.some((m) => m.to === hacia && m.promotion);
+    if (corona) return pedirCoronacion(a.color, (p) => mover(a.desde, hacia, p));
+    return mover(a.desde, hacia, "q");
+  }
+  // Soltada fuera de una casilla válida: la pieza regresa y queda elegida para jugar con clic
+  dibujar();
+}
+function cancelarArrastre() { limpiarArrastre(); arrastre = null; dibujar(); }
+
 // ---------- Reloj ----------
 const avisosTiempo = new Set();
 function restantes() {
@@ -2718,7 +2809,11 @@ function dibujar() {
         if (d.posicion) div.style.backgroundPosition = d.posicion;
         btn.appendChild(div);
       }
-      btn.addEventListener("click", () => tocar(casilla, juego, puedoMover, color));
+      btn.addEventListener("click", () => {
+        if (suprimirClick) { suprimirClick = false; return; }
+        tocar(casilla, juego, puedoMover, color);
+      });
+      if (pieza && puedoMover && pieza.color === color) btn.addEventListener("pointerdown", (e) => iniciarArrastre(e, btn, casilla, juego, color));
       tablero.appendChild(btn);
     }
   }
