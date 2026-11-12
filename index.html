@@ -227,7 +227,7 @@ body.enfoque .lateral-izq, body.enfoque .lateral-chat { display: none !important
 .maximizar .icono-cerrar { display: none; }
 /* Modo tablero grande: solo el tablero y los relojes ocupan la pantalla */
 /* Pantalla completa: tablero grande + columna angosta con la cámara del rival y un chat mínimo */
-body.enfoque header, body.enfoque .barra-vista, body.enfoque .lateral > :not(#video):not(#chat):not(#panel-estado):not(#entrenador) { display: none !important; }
+body.enfoque header, body.enfoque .lateral > :not(#video):not(#chat):not(#panel-estado):not(#entrenador) { display: none !important; }
 /* En pantalla completa, del panel de estado solo quedan el botón grande, las opciones de pausa y una oferta de tablas */
 body.enfoque #panel-estado > :not(#control-estado):not(#oferta-tablas) { display: none !important; }
 body.enfoque #panel-estado { padding: 10px; gap: 8px; }
@@ -252,8 +252,8 @@ body.enfoque .envoltura { max-width: none; padding: 8px 16px; }
 body.enfoque #partida { grid-template-columns: minmax(0, 1fr) 320px !important; gap: 16px; }
 @media (max-width: 760px) { body.enfoque #partida { grid-template-columns: 1fr !important; } }
 body.enfoque .zona-tablero { gap: 8px; }
-body.enfoque .escena { max-width: min(100%, calc(100vh - 240px)); padding: 32px 28px 24px; }
-body.enfoque .jugador, body.enfoque .hud { max-width: min(100%, calc(100vh - 240px)); }
+body.enfoque .escena { max-width: min(100%, calc(100vh - 300px)); padding: 26px 24px 20px; }
+body.enfoque .jugador, body.enfoque .hud, body.enfoque .barra-vista { max-width: min(100%, calc(100vh - 300px)); }
 body.enfoque .maximizar .icono-abrir { display: none; }
 body.enfoque .maximizar .icono-cerrar { display: inline; }
 .marco { background: #4A2F1C; padding: 22px; border-radius: 14px; transform-origin: 50% 100%; transform-style: preserve-3d; box-shadow: var(--sombra-2); transition: transform 200ms var(--resorte); }
@@ -842,7 +842,9 @@ body.enfoque .ent-leyenda { display: none; }
 
 /* ---------- Pantalla completa: plan y sugerencias en su propia columna, junto al tablero ---------- */
 .lateral-plan { display: none; }
-body.enfoque.plan-aparte #partida { grid-template-columns: minmax(0, 1fr) 300px 320px !important; }
+/* Tablero siempre al centro: plan a la izquierda, entrenador a la derecha (no se mueve nada) */
+body.enfoque.plan-aparte #partida { grid-template-columns: 290px minmax(0, 1fr) 320px !important; }
+body.enfoque.plan-aparte .lateral-plan { order: -1; margin-top: 56px; max-height: calc(100vh - 72px) !important; }
 body.enfoque.plan-aparte .lateral-plan { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid rgba(111,168,220,0.35); }
 body.enfoque .ent-contexto { max-height: 190px; overflow-y: auto; }
 body.enfoque .lateral { max-height: calc(100vh - 16px); overflow-y: auto; }
@@ -864,6 +866,17 @@ body.enfoque .lateral { max-height: calc(100vh - 16px); overflow-y: auto; }
 .l-morado { background: #B47CF0; }
 .ent-tarjeta.respuesta { border-left-color: #B47CF0; }
 body.enfoque .ent-preguntas { display: flex; }
+
+/* Estilos del tablero en pantalla completa: barra mínima debajo del tablero */
+body.enfoque .barra-vista { width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 10px; border-radius: 12px; }
+body.enfoque .vista-fila { gap: 6px; flex-wrap: nowrap; }
+body.enfoque .vista-fila label, body.enfoque .vista-etiqueta { min-width: 0; font-size: 11px; }
+body.enfoque .vista-fila input[type="range"] { width: 90px; flex: none; }
+body.enfoque .vista-fila output { font-size: 11px; }
+body.enfoque .segmentos { flex-wrap: nowrap; padding: 2px; gap: 2px; overflow-x: auto; max-width: 100%; }
+body.enfoque .segmentos button { height: 24px; padding: 0 7px; font-size: 11px; white-space: nowrap; }
+body.enfoque .zona-tablero { gap: 6px; }
+.plan-espera { margin: 0; font-size: 13px; color: var(--suave); line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>

@@ -1840,14 +1840,16 @@ function pintarPlan() {
   // 4) La estructura de peones
   const notas = Math.ceil(partida.jugadas.length / 2) >= 4 ? notasEstructura(partida.fen, miColor()) : [];
   if (notas.length) html += `<div class="plan-caja"><span class="plan-titulo">🧱 Estructura de peones</span><ul class="estructura">${notas.map((n) => `<li>${n}</li>`).join("")}</ul></div>`;
-  caja.innerHTML = html;
+  // Durante el turno de la Máquina se conserva lo último para que nada salte en la pantalla
+  if (!miTurno && partida.estado === "jugando" && caja.innerHTML.trim()) { ubicarPlan(); return; }
+  caja.innerHTML = html || `<p class="plan-espera">Aquí verás el plan, la fase de la partida y las sugerencias de cambio de plan.</p>`;
   ubicarPlan();
 }
 // En pantalla completa y pantallas anchas, el plan va en su propia columna junto al tablero
 const pantallaPlan = matchMedia("(min-width: 1200px)");
 function ubicarPlan() {
   const plan = $("ent-plan");
-  const aparte = document.body.classList.contains("enfoque") && pantallaPlan.matches && !!partida?.didactico && plan.innerHTML.trim() !== "";
+  const aparte = document.body.classList.contains("enfoque") && pantallaPlan.matches && !!partida?.local && !!partida?.didactico;
   document.body.classList.toggle("plan-aparte", aparte);
   if (aparte) { if (plan.parentElement !== $("lateral-plan")) $("lateral-plan").appendChild(plan); }
   else if (plan.parentElement !== $("entrenador")) $("rep-jugar").after(plan);
