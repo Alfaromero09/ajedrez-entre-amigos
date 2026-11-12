@@ -793,6 +793,31 @@ body.enfoque .ent-leyenda { display: none; }
 #jugadas.navegable li span:nth-child(n+2):hover { background: #3A281C; }
 #jugadas li span.vista { background: rgba(111,168,220,0.25); color: #CFE3F5; }
 .escena.repaso .marco { box-shadow: 0 0 0 3px rgba(111,168,220,0.7); }
+
+/* ---------- Plan, fase y estructura ---------- */
+.ent-plan { display: flex; flex-direction: column; gap: 10px; }
+.ent-plan:empty { display: none; }
+.plan-caja { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: #1F150E; border: 1px solid var(--linea); }
+.plan-titulo { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; color: var(--suave); text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+.plan-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.plan-lista li { display: grid; grid-template-columns: 20px 52px minmax(0, 1fr); gap: 6px; align-items: baseline; padding: 4px 6px; border-radius: 8px; font-size: 13px; color: var(--suave); }
+.plan-lista li b { color: var(--texto); font-weight: 600; }
+.plan-lista li.hecho { opacity: 0.55; }
+.plan-lista li.hecho b { text-decoration: line-through; }
+.plan-lista li.siguiente { background: rgba(95,191,90,0.16); border: 1px solid rgba(95,191,90,0.55); color: #D3EFCD; }
+.plan-lista li.siguiente b { color: #BDE5B5; }
+.plan-lista li.imposible { opacity: 0.4; }
+.fase { padding: 8px 10px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.fase.ataque { background: rgba(95,191,90,0.12); border: 1px solid rgba(95,191,90,0.45); color: #D3EFCD; }
+.fase.defensa { background: rgba(217,68,58,0.12); border: 1px solid rgba(217,68,58,0.45); color: #F3C1BB; }
+.fase.equilibrio { background: rgba(233,220,195,0.06); border: 1px solid var(--linea); color: #E2D3B8; }
+.cambio-plan { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: rgba(95,191,90,0.08); border: 1px dashed rgba(95,191,90,0.55); }
+.cambio-plan p { margin: 0; font-size: 13px; line-height: 1.5; color: #D3EFCD; }
+.cambio-plan .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cambio-plan button { padding: 5px 10px; border-radius: 999px; border: 1px solid #5FBF5A; background: rgba(95,191,90,0.16); color: #BDE5B5; font-size: 12px; font-weight: 600; }
+.cambio-plan button:hover { background: rgba(95,191,90,0.28); transform: none; }
+.estructura { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.45; color: #E2D3B8; }
+.estructura li::before { content: "• "; color: var(--laton-claro); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -1035,6 +1060,7 @@ body.enfoque .ent-leyenda { display: none; }
             <button type="button" id="rep-fin" aria-label="Volver a la posición actual">⏭</button>
           </div>
           <button type="button" class="ent-btn jugar-aqui oculto" id="rep-jugar">▶ Jugar desde aquí</button>
+          <div id="ent-plan" class="ent-plan"></div>
           <div class="ent-leyenda"><span><i class="l-verde"></i>Mejor</span><span><i class="l-amarillo"></i>Buena opción</span><span><i class="l-rojo"></i>Tu error</span><span><i class="l-naranja"></i>Amenaza</span><span><i class="l-azul"></i>Lección</span></div>
         </section>
         <div id="video" class="video oculto" aria-label="Cámaras">

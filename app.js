@@ -1108,7 +1108,7 @@ async function jugadaMotor(fen, nivel) {
 
 // Análisis a toda fuerza: las mejores líneas con su evaluación (desde el lado que mueve)
 async function analizar(fen, lineas = 3, ms = 700) {
-  await conLimite(iniciarMotor(), 15000);
+  try { await conLimite(iniciarMotor(), 15000); } catch (e) { motorFallo = true; throw e; }
   return enCola(() => conLimite(new Promise((listo) => {
     const res = {};
     const escuchar = (e) => {
@@ -1292,7 +1292,12 @@ async function turnoMaquina() {
       if (m) uci = m.from + m.to + (m.promotion || "");
     }
   }
-  if (!uci) try { uci = await jugadaMotor(fenAntes, partida.nivel); } catch { avisar("No se pudo cargar la Máquina. Revisa tu conexión y recarga."); }
+  if (!uci) try { uci = await jugadaMotor(fenAntes, partida.nivel); } catch { motorFallo = true; }
+  // Si el motor no responde, la Máquina juega con un método sencillo para que la partida nunca se detenga
+  if (!uci || uci === "(none)") {
+    uci = jugadaSencilla(fenAntes);
+    if (motorFallo && !avisoMotor) { avisoMotor = true; avisar("El motor de la Máquina no respondió: sigue jugando en modo sencillo. Revisa que la carpeta «motor» esté en GitHub."); }
+  }
   // Una pausa breve para que se sienta natural
   const espera = 500 - (Date.now() - inicio);
   if (espera > 0) await new Promise((r) => setTimeout(r, espera));
@@ -1302,6 +1307,34 @@ async function turnoMaquina() {
 }
 
 // ======================= ENTRENADOR =======================
+let motorFallo = false, avisoMotor = false;
+// Jugada de respaldo sin motor: captura lo más valioso sin dejar piezas colgadas
+function jugadaSencilla(fen) {
+  const c = new Chess(fen);
+  let mejor = null, mejorValor = -Infinity;
+  for (const m of c.moves({ verbose: true })) {
+    c.move(m);
+    let v = Math.random() * 15;
+    if (c.isCheckmate()) v = 1e6;
+    else {
+      if (m.captured) v += VALOR_PIEZA[m.captured] * 100;
+      if (m.promotion) v += 800;
+      if (c.inCheck()) v += 25;
+      try { if (c.attackers(m.to, c.turn()).length && !c.attackers(m.to, m.color).length) v -= VALOR_PIEZA[m.piece] * 100; } catch {}
+    }
+    c.undo();
+    if (v > mejorValor) { mejorValor = v; mejor = m; }
+  }
+  return mejor ? mejor.from + mejor.to + (mejor.promotion || "") : null;
+}
+// Piezas atacadas y sin defensa de un color
+function piezasColgadas(fen, color) {
+  const c = new Chess(fen), rival = color === "w" ? "b" : "w";
+  try {
+    return c.board().flat().filter((p) => p && p.color === color && p.type !== "k" && p.type !== "p" &&
+      c.attackers(p.square, rival).length && !c.attackers(p.square, color).length).map((p) => ({ sq: p.square, tipo: p.type }));
+  } catch { return []; }
+}
 const ESPN = { N: "C", B: "A", R: "T", Q: "D", K: "R" };
 const sanEs = (san) => String(san || "").replace(/^[NBRQK]/, (l) => ESPN[l]).replace(/=([NBRQ])/, (m, l) => "=" + ESPN[l]);
 const limpiaSan = (san) => String(san).replace(/[+#]/g, "");
@@ -1435,6 +1468,7 @@ async function entrenadorTuTurno() {
   if (!lineas || partida.fen !== fen) return null;
   analisisTurno = { fen, lineas };
   if (pistasVisibles) mostrarPistas();
+  pintarPlan();
   return lineas;
 }
 function mostrarPistas() {
@@ -1483,7 +1517,10 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
     const fueLaMejor = mejor && mejor.uci.slice(0, 4) === uci.slice(0, 4);
     const enLista = antes.some((l) => l.uci.slice(0, 4) === uci.slice(0, 4));
     let clase, titulo;
+    const segunda = antes[1];
+    const empate = segunda && Math.abs(mejor.valor - segunda.valor) < 30;   // varias jugadas casi iguales
     if (fueLaMejor) { clase = "mejor"; titulo = "✅ ¡La mejor jugada!"; }
+    else if (perdida <= 30) { clase = "mejor"; titulo = "✅ Excelente (prácticamente igual que la mejor)"; }
     else if (perdida <= 70 || enLista && perdida <= 100) { clase = "buena"; titulo = "👍 Buena jugada"; }
     else if (perdida <= 160) { clase = "imprecision"; titulo = "🟡 Imprecisión"; }
     else if (perdida <= 350) { clase = "error"; titulo = "🟠 Error"; }
@@ -1492,7 +1529,10 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
     const sanMejor = mejor && uciASan(fenAntes, mejor.uci);
     let html = `<span class="ent-veredicto">${titulo}</span>`;
     html += `<p>Jugaste <strong>${esc(sanEs(m?.san))}</strong>: ${esc(porQueJugada(fenAntes, uci))}.</p>${chipsTipo(fenAntes, uci)}`;
-    if (!fueLaMejor && sanMejor) {
+    if (empate && perdida <= 30) html += `<p>Aquí había varias jugadas casi igual de buenas: en esta posición importa más el <strong>plan</strong> que la jugada exacta.</p>`;
+    const colgadas = piezasColgadas(partida.fen, miColor());
+    if (colgadas.length && partida.estado === "jugando") html += `<p>⚠️ Ojo: tu ${NOMBRE_PIEZA[colgadas[0].tipo]} de ${colgadas[0].sq} quedó <strong>sin defensa</strong> y está atacado.</p>`;
+    if (!fueLaMejor && perdida > 30 && sanMejor) {
       html += `<p>${clase === "buena" ? "También estaba" : "Mejor era"} <strong style="color:#8FD88A">${esc(sanEs(sanMejor.san))}</strong> (flecha verde): ${esc(porQueJugada(fenAntes, mejor.uci))}.${perdida > 70 ? ` Te costó unos ${(perdida / 100).toFixed(1)} peones de ventaja.` : ""}</p>`;
       flechas.push({ de: mejor.uci.slice(0, 2), a: mejor.uci.slice(2, 4), color: "verde" });
       if (clase !== "buena") flechas.push({ de: uci.slice(0, 2), a: uci.slice(2, 4), color: "rojo" });
@@ -1513,7 +1553,12 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
     tarjeta(clase, html, "veredicto");
     pintarFlechas();
     if (["error", "grave"].includes(clase)) sonido("tiempo");
-  } catch (e) { console.warn("Entrenador:", e); tarjeta("", "<p>No pude analizar esta jugada. Sigue jugando; en la siguiente lo intento de nuevo.</p>"); }
+  } catch (e) {
+    console.warn("Entrenador:", e);
+    tarjeta("", motorFallo
+      ? "<p>El motor de análisis no está respondiendo, así que no puedo calificar jugadas por ahora. La partida sigue; revisa que la carpeta «motor» esté subida a GitHub.</p>"
+      : "<p>No pude analizar esta jugada. Sigue jugando; en la siguiente lo intento de nuevo.</p>");
+  }
   ocupadoEntrenador = false;
   $("ent-deshacer").disabled = false;
   if (partida.estado === "terminada") return contarLocal();
@@ -1523,6 +1568,12 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
 
 // ¿Qué amenaza la Máquina si fuera su turno otra vez?
 async function buscarAmenaza(miValor = 0) {
+  const colgadas = piezasColgadas(partida.fen, miColor());
+  if (colgadas.length) {
+    $("ent-amenaza").innerHTML = `⚠️ <strong>Pieza en peligro:</strong> tu ${NOMBRE_PIEZA[colgadas[0].tipo]} de ${colgadas[0].sq} está atacado y nadie lo defiende. Muévelo o protégelo.`;
+    $("ent-amenaza").classList.remove("oculto");
+    return;
+  }
   const fen = partida.fen;
   const partes = fen.split(" ");
   partes[1] = partes[1] === "w" ? "b" : "w";
@@ -1574,6 +1625,108 @@ function guiaTema() {
   }
   return { fin: true };
 }
+// Qué tan bien encaja cada tema con la partida real
+function puntajeTema(t) {
+  if (t.color !== miColor()) return -1;
+  const jug = partida.jugadas.map((j) => limpiaSan(j.san)), linea = t.linea.split(" ");
+  let pref = 0; while (pref < jug.length && pref < linea.length && jug[pref] === linea[pref]) pref++;
+  const mias = jug.filter((_, i) => (i % 2 === 0) === (t.color === "w"));
+  const hechos = t.plan.filter(([san]) => mias.includes(limpiaSan(san))).length;
+  const legales = t.plan.filter(([san]) => !mias.includes(limpiaSan(san)) && movLegal(partida.fen, san)).length;
+  return hechos * 2 + pref + legales * 0.5;
+}
+function temasSugeridos() {
+  if (new Chess(partida.fen).turn() !== miColor()) return [];
+  return TEMAS.filter((t) => t.color === miColor()).map((t) => ({ t, p: puntajeTema(t) })).filter((x) => x.p >= 2).sort((a, b) => b.p - a.p);
+}
+// Notas de estructura de peones, al estilo de un entrenador
+function notasEstructura(fen, color) {
+  const c = new Chess(fen), rival = color === "w" ? "b" : "w";
+  const peones = { w: [], b: [] };
+  c.board().flat().forEach((p) => { if (p && p.type === "p") peones[p.color].push(p.square); });
+  const col = (sq) => "abcdefgh".indexOf(sq[0]), fila = (sq) => Number(sq[1]);
+  const notas = [];
+  const analiza = (quien, esMio) => {
+    const otro = quien === "w" ? "b" : "w";
+    const porColumna = {};
+    peones[quien].forEach((sq) => { porColumna[sq[0]] = (porColumna[sq[0]] || 0) + 1; });
+    const doblados = Object.keys(porColumna).filter((k) => porColumna[k] > 1);
+    const aislados = peones[quien].filter((sq) => !peones[quien].some((o) => Math.abs(col(o) - col(sq)) === 1));
+    const pasados = peones[quien].filter((sq) => !peones[otro].some((o) => Math.abs(col(o) - col(sq)) <= 1 &&
+      (quien === "w" ? fila(o) > fila(sq) : fila(o) < fila(sq))));
+    if (esMio) {
+      if (pasados.length) notas.push(`Tienes un <strong>peón pasado</strong> en ${pasados[0]}: nadie puede frenarlo con peones; empújalo con apoyo de tus piezas.`);
+      if (aislados.length) notas.push(`Tu peón de ${aislados[0]} está <strong>aislado</strong>: no tiene peones vecinos que lo cuiden; protégelo con piezas o cámbialo.`);
+      if (doblados.length) notas.push(`Tienes <strong>peones doblados</strong> en la columna ${doblados[0]}: son más lentos y difíciles de defender.`);
+    } else {
+      if (pasados.length) notas.push(`La Máquina tiene un <strong>peón pasado</strong> en ${pasados[0]}: bloquéalo con una pieza (idealmente un caballo) justo enfrente.`);
+      if (aislados.length) notas.push(`El peón rival de ${aislados[0]} está <strong>aislado</strong>: es un buen blanco; ataca la casilla de enfrente.`);
+    }
+  };
+  analiza(color, true);
+  analiza(rival, false);
+  // Alfil malo: tus peones del centro fijos en el color de tu alfil
+  const alfiles = c.board().flat().filter((p) => p && p.color === color && p.type === "b");
+  if (alfiles.length === 1) {
+    const claro = (sq) => (col(sq) + fila(sq)) % 2 === 1;
+    const colorAlfil = claro(alfiles[0].square);
+    const mismos = peones[color].filter((sq) => "cdef".includes(sq[0]) && claro(sq) === colorAlfil).length;
+    if (mismos >= 3) notas.push(`Tu alfil de ${alfiles[0].square} es un <strong>alfil malo</strong>: muchos de tus peones centrales están en su mismo color. Busca cambiarlo o sacarlo por fuera de la cadena.`);
+  }
+  // Columnas abiertas para tus torres
+  const abiertas = "abcdefgh".split("").filter((f) => !peones.w.some((s) => s[0] === f) && !peones.b.some((s) => s[0] === f));
+  if (abiertas.length && Math.ceil(partida.jugadas.length / 2) >= 8) notas.push(`La columna <strong>${abiertas[0]}</strong> está abierta: es la carretera ideal para una torre.`);
+  return notas.slice(0, 3);
+}
+function textoFase(valor) {
+  if (valor == null) return "";
+  if (valor >= 150) return `<div class="fase ataque">⚔️ <strong>Fase de ataque:</strong> tienes ventaja. Acerca piezas al rey rival, abre líneas y busca cambiar piezas solo si te conviene simplificar.</div>`;
+  if (valor <= -150) return `<div class="fase defensa">🛡️ <strong>Fase de defensa:</strong> estás peor. Protege a tu rey, cambia piezas activas del rival y no abras el juego; busca complicar o bloquear.</div>`;
+  return `<div class="fase equilibrio">⚖️ <strong>Posición equilibrada:</strong> mejora tus piezas peor colocadas, controla el centro y busca un plan claro antes de atacar.</div>`;
+}
+function pintarPlan() {
+  const caja = $("ent-plan");
+  if (!partida?.didactico || vistaIndice !== null) { caja.innerHTML = ""; return; }
+  const t = temaActivo();
+  let html = "";
+  const miTurno = partida.estado === "jugando" && new Chess(partida.fen).turn() === miColor();
+  // Lista del plan con la siguiente jugada en verde
+  if (t && t.color === miColor()) {
+    const mias = partida.jugadas.map((j) => limpiaSan(j.san)).filter((_, i) => (i % 2 === 0) === (t.color === "w"));
+    html += `<div class="plan-caja"><span class="plan-titulo"><span>Plan · ${esc(t.nombre)}</span><span>${esc(t.tipo || "")}</span></span><ol class="plan-lista">` +
+      t.plan.map(([san, texto]) => {
+        const hecho = mias.includes(limpiaSan(san));
+        const sig = guiaActual && !guiaActual.fin && limpiaSan(guiaActual.san) === limpiaSan(san);
+        const imposible = !hecho && miTurno && !sig && !movLegal(partida.fen, san);
+        const marca = hecho ? "✅" : sig ? "👉" : imposible ? "·" : "○";
+        return `<li class="${hecho ? "hecho" : sig ? "siguiente" : imposible ? "imposible" : ""}"><span>${marca}</span><b>${esc(sanEs(san))}</b><span>${esc(texto)}</span></li>`;
+      }).join("") + "</ol></div>";
+  }
+  // El entrenador improvisa: si otro plan encaja mejor, lo propone
+  if (miTurno) {
+    const sug = temasSugeridos();
+    const actual = t ? puntajeTema(t) : 0;
+    const atorado = t && (!guiaActual || guiaActual.fin);
+    const mejores = sug.filter((x) => x.t.id !== t?.id && (atorado || x.p > actual + 1.5)).slice(0, 3);
+    if (mejores.length) {
+      html += `<div class="cambio-plan"><p>${t ? `🔄 La partida tomó otro rumbo: tu posición ahora encaja mejor con` : "💡 Planes que encajan con tu posición:"}</p><div class="chips">` +
+        mejores.map((x) => `<button type="button" data-cambiar-tema="${x.t.id}">${esc(x.t.nombre)} · ${esc(x.t.tipo || "")}</button>`).join("") + "</div></div>";
+    }
+  }
+  // Fase de la partida y estructura
+  if (miTurno && analisisTurno?.fen === partida.fen) html += textoFase(analisisTurno.lineas[0]?.valor);
+  const notas = Math.ceil(partida.jugadas.length / 2) >= 4 ? notasEstructura(partida.fen, miColor()) : [];
+  if (notas.length) html += `<div class="plan-caja"><span class="plan-titulo">🧱 Estructura de peones</span><ul class="estructura">${notas.map((n) => `<li>${n}</li>`).join("")}</ul></div>`;
+  caja.innerHTML = html;
+}
+$("ent-plan").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cambiar-tema]");
+  if (!b) return;
+  partida.tema = b.dataset.cambiarTema;
+  guardarLocal();
+  pintarTema(); pintarPlan(); pintarFlechas();
+  avisar(`🔄 Cambiamos de plan: ${temaActivo().nombre}`);
+});
 function pintarTema() {
   const caja = $("ent-tema");
   const t = temaActivo();
@@ -1589,7 +1742,14 @@ function pintarTema() {
   if (vistaIndice !== null) { caja.innerHTML = cabeza + "<p>Estás repasando. Vuelve a la posición actual para seguir con el plan.</p>"; return; }
   const g = guiaTema();
   if (!g) { caja.innerHTML = cabeza + "<p>Espera la jugada de la Máquina…</p>"; return; }
-  if (g.fin) { caja.innerHTML = cabeza + "<p>✅ Ya completaste el plan de este tema. ¡Ahora juega libre con lo aprendido!</p>"; return; }
+  if (g.fin) {
+    const mias = partida.jugadas.map((j) => limpiaSan(j.san)).filter((_, i) => (i % 2 === 0) === (t.color === "w"));
+    const completo = t.plan.every(([san]) => mias.includes(limpiaSan(san)));
+    caja.innerHTML = cabeza + (completo
+      ? "<p>✅ Completaste el plan de este tema. ¡Ahora juega libre con lo aprendido!</p>"
+      : "<p>La partida se alejó de este plan y ya no se puede seguir aquí. Abajo te propongo planes que encajan mejor con tu posición.</p>");
+    return;
+  }
   guiaActual = g;
   caja.innerHTML = cabeza + `<p>${g.enLinea ? "Siguiendo la teoría, tu siguiente jugada es" : "Para volver al plan, tu siguiente jugada debería ser"} <strong>${esc(sanEs(g.m.san))}</strong> (flecha azul): ${esc(g.texto)}.</p>`;
 }
@@ -1772,6 +1932,7 @@ function pintarEntrenador() {
   $("entrenador").classList.toggle("oculto", !ver);
   if (!ver) return;
   pintarTema();
+  pintarPlan();
   pintarRepaso();
   pintarFlechas();
 }
