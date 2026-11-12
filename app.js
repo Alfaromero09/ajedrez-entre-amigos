@@ -1197,8 +1197,35 @@ $("vsm-lecciones").addEventListener("click", (e) => {
   if (!b) return;
   $("vsm-lecciones").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
 });
+// Prueba de verdad que el motor responde (pide una jugada a la posición inicial)
+let estadoMotor = null;   // null = sin probar, true = listo, false = falla
+async function probarMotor() {
+  if (estadoMotor !== null) return estadoMotor;
+  try {
+    await conLimite(iniciarMotor(), 15000);
+    const r = await enCola(() => conLimite(new Promise((listo) => {
+      const escuchar = (e) => { const t = String(e.data); if (t.startsWith("bestmove")) { motor.removeEventListener("message", escuchar); listo(t.split(" ")[1]); } };
+      motor.addEventListener("message", escuchar);
+      motor.postMessage("position startpos");
+      motor.postMessage("go depth 6");
+    }), 8000));
+    estadoMotor = !!r && r !== "(none)";
+  } catch { estadoMotor = false; }
+  if (!estadoMotor) motorFallo = true;
+  return estadoMotor;
+}
+function pintarEstadoMotor() {
+  const el = $("vsm-motor");
+  if (estadoMotor === null) { el.className = "vsm-motor"; el.textContent = "Revisando el motor…"; return; }
+  el.className = `vsm-motor ${estadoMotor ? "ok" : "mal"}`;
+  el.innerHTML = estadoMotor
+    ? "✅ Motor Stockfish listo: los niveles 1 a 4 juegan a su fuerza real."
+    : "⚠️ <strong>El motor Stockfish no cargó.</strong> La Máquina jugaría en modo sencillo (muy débil) en cualquier nivel. Revisa que la carpeta <strong>motor</strong> esté en GitHub.";
+}
 function abrirVsMaquina() {
   const c = configLocal();
+  pintarEstadoMotor();
+  probarMotor().then(pintarEstadoMotor);
   pintarLeccionesModal(c.leccion || LECCIONES[0].id);
   modoModal(c.modo || "libre");
   $("vsm-entrenador").checked = c.didactico !== false;
@@ -1276,6 +1303,7 @@ async function abrirLocal(recien) {
   partida = g;
   cerrarVideo();
   if (canal) { sb.removeChannel(canal); canal = null; }
+  probarMotor().then(() => { if (partida?.local) dibujar(); });
   document.body.classList.toggle("sin-reloj", !partida.minutos);
   document.body.classList.add("vs-maquina");
   elegida = null; movimientos = [];
@@ -1289,6 +1317,13 @@ async function abrirLocal(recien) {
 
 function ajustarVistaLocal(color, turno) {
   pintarEntrenador();
+  // Marca junto al nombre de la Máquina: si juega con Stockfish o en modo sencillo
+  const lado = partida.blancas === MAQUINA ? (miColor() === "b" ? "arriba" : "abajo") : (miColor() === "w" ? "arriba" : "abajo");
+  const nombre = $(lado)?.querySelector(".lado strong");
+  if (nombre && estadoMotor !== null && !nombre.querySelector(".motor-chip"))
+    nombre.insertAdjacentHTML("beforeend", estadoMotor && !motorFallo
+      ? `<span class="motor-chip ok" title="Juega con Stockfish">STOCKFISH · NIVEL ${partida.nivel === "facil" ? 1 : partida.nivel === "medio" ? 2 : partida.nivel === "dificil" ? 3 : 4}</span>`
+      : `<span class="motor-chip mal" title="El motor no cargó; juega en modo sencillo">MODO SENCILLO</span>`);
   $("chat").classList.add("oculto");
   $("control-estado").classList.add("oculto");
   $("aviso-pausa").classList.add("oculto");
@@ -1344,7 +1379,7 @@ async function turnoMaquina() {
   // Si el motor no responde, la Máquina juega con un método sencillo para que la partida nunca se detenga
   if (!uci || uci === "(none)") {
     uci = jugadaSencilla(fenAntes);
-    if (motorFallo && !avisoMotor) { avisoMotor = true; avisar("El motor de la Máquina no respondió: sigue jugando en modo sencillo. Revisa que la carpeta «motor» esté en GitHub."); }
+    if (motorFallo && !avisoMotor) { avisoMotor = true; estadoMotor = false; avisar("⚠️ El motor Stockfish no respondió: la Máquina juega en MODO SENCILLO (muy débil). Revisa que la carpeta «motor» esté en GitHub."); }
   }
   // Una pausa breve para que se sienta natural
   const espera = 500 - (Date.now() - inicio);
