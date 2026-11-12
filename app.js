@@ -1465,6 +1465,23 @@ const sanEs = (san) => String(san || "").replace(/^[NBRQK]/, (l) => ESPN[l]).rep
 const limpiaSan = (san) => String(san).replace(/[+#]/g, "");
 let flechas = [];
 let pistasVisibles = false;
+// Qué ayudas quiere ver el jugador (se recuerda en este dispositivo)
+const ayudas = (() => { try { return { amenazas: true, notas: true, veredicto: true, ...JSON.parse(LS?.getItem("ajedrez-ayudas") || "{}") }; } catch { return { amenazas: true, notas: true, veredicto: true }; } })();
+function guardarAyudas() { try { LS?.setItem("ajedrez-ayudas", JSON.stringify(ayudas)); } catch {} }
+function pintarAyudas() {
+  document.querySelectorAll("[data-ayuda]").forEach((b) => b.setAttribute("aria-pressed", String(!!ayudas[b.dataset.ayuda])));
+  const alguna = ayudas.amenazas || ayudas.notas || ayudas.veredicto || pistasVisibles;
+  $("ayudas-todas").textContent = alguna ? "🙈 Jugar sin ayudas" : "👀 Activar ayudas";
+  $("entrenador").classList.toggle("sin-ayudas", !alguna);
+}
+function aplicarAyudas() {
+  if (!ayudas.amenazas) { $("ent-amenaza").classList.add("oculto"); flechas = flechas.filter((f) => f.color !== "naranja"); }
+  if (!ayudas.notas) $("ent-notas").classList.add("oculto"); else pintarNotas();
+  if (!ayudas.veredicto) flechas = flechas.filter((f) => f.color !== "rojo" && !(f.color === "verde" && !pistasVisibles));
+  if (ayudas.amenazas && partida?.local && partida.estado === "jugando" && new Chess(partida.fen).turn() === miColor()) buscarAmenaza(analisisTurno?.fen === partida.fen ? analisisTurno.lineas[0]?.valor ?? 0 : 0);
+  pintarFlechas();
+  pintarAyudas();
+}
 let analisisTurno = null;      // { fen, lineas }
 let ultimaApertura = null;
 let ocupadoEntrenador = false;
@@ -1672,6 +1689,14 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
     return;
   }
   const guiaPrevia = guiaJugada;
+  if (!ayudas.veredicto) {
+    flechas = flechas.filter((f) => f.color === "naranja");
+    tarjeta("", `<span class="ent-veredicto">Jugaste ${esc(sanEs(m?.san))}</span>${chipsTipo(fenAntes, uci)}`, "veredicto");
+    pintarFlechas();
+    if (partida.estado === "terminada") return contarLocal();
+    setTimeout(() => turnoMaquina(), 300);
+    return;
+  }
   ocupadoEntrenador = true;
   $("ent-deshacer").disabled = true;
   tarjeta("", `<span class="ent-veredicto">Analizando tu jugada<span class="analizando"><i></i><i></i><i></i></span></span>`);
@@ -1738,7 +1763,8 @@ async function entrenadorDespuesDeJugada(fenAntes, uci, miJugada) {
 }
 
 // ¿Qué amenaza la Máquina si fuera su turno otra vez?
-async function buscarAmenaza(miValor = 0) {
+async function buscarAmenaza(miValor = 0, forzar = false) {
+  if (!ayudas.amenazas && !forzar) { $("ent-amenaza").classList.add("oculto"); return; }
   const colgadas = piezasColgadas(partida.fen, miColor());
   if (colgadas.length) {
     $("ent-amenaza").innerHTML = `⚠️ <strong>Pieza en peligro:</strong> tu ${NOMBRE_PIEZA[colgadas[0].tipo]} de ${colgadas[0].sq} está atacado y nadie lo defiende. Muévelo o protégelo.`;
@@ -2043,6 +2069,7 @@ function notaDeJugada(fen, uci) {
 }
 function pintarNotas() {
   const caja = $("ent-notas");
+  if (!ayudas.notas) { caja.classList.add("oculto"); return; }
   const miTurno = partida?.didactico && partida.estado === "jugando" && vistaIndice === null && new Chess(partida.fen).turn() === miColor();
   if (!miTurno || !analisisTurno || analisisTurno.fen !== partida.fen) { caja.classList.add("oculto"); return; }
   const colores = ["verde", "amarillo", "amarillo"];
@@ -2071,7 +2098,7 @@ async function responderPregunta(pregunta) {
   try {
     if (pregunta === "amenaza") {
       flechas = [];
-      await buscarAmenaza(analisisTurno?.fen === fen ? analisisTurno.lineas[0]?.valor ?? 0 : 0);
+      await buscarAmenaza(analisisTurno?.fen === fen ? analisisTurno.lineas[0]?.valor ?? 0 : 0, true);
       const hay = !$("ent-amenaza").classList.contains("oculto");
       tarjeta("respuesta", `<span class="ent-veredicto">🙋 ¿Qué me amenaza?</span><p>${hay ? "Mira el aviso naranja y la flecha naranja en el tablero: eso es lo que la Máquina quiere hacer." : "Ahora mismo no veo amenazas serias contra ti. Buen momento para mejorar tus piezas o atacar."}</p>`, "respuesta");
       return;
@@ -2166,12 +2193,25 @@ function pintarFlechas() {
   tab.insertAdjacentHTML("beforeend", `<svg class="flechas" viewBox="0 0 8 8" aria-hidden="true">${svg}</svg>`);
 }
 
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ayuda]");
+  if (b) { ayudas[b.dataset.ayuda] = !ayudas[b.dataset.ayuda]; guardarAyudas(); aplicarAyudas(); }
+});
+$("ayudas-todas").addEventListener("click", () => {
+  const alguna = ayudas.amenazas || ayudas.notas || ayudas.veredicto || pistasVisibles;
+  ayudas.amenazas = ayudas.notas = ayudas.veredicto = !alguna;
+  if (alguna && pistasVisibles) $("ent-pistas").click();
+  guardarAyudas();
+  aplicarAyudas();
+  avisar(alguna ? "🙈 Ayudas apagadas: juega a tu ritmo. Puedes preguntarle al entrenador cuando quieras." : "👀 Ayudas encendidas.");
+});
 $("ent-pistas").addEventListener("click", () => {
   pistasVisibles = !pistasVisibles;
   $("ent-pistas").setAttribute("aria-pressed", String(pistasVisibles));
   $("ent-pistas").textContent = pistasVisibles ? "💡 Ocultar sugerencias" : "💡 Ver mejores jugadas";
   if (pistasVisibles) { if (analisisTurno?.fen === partida.fen) mostrarPistas(); else entrenadorTuTurno(); }
   else { flechas = flechas.filter((f) => f.color === "naranja"); pintarFlechas(); }
+  pintarAyudas();
 });
 
 // Deshacer: regresa a antes de tu última jugada
@@ -2248,6 +2288,7 @@ function pintarEntrenador() {
   const ver = !!(partida?.local && partida.didactico);
   $("entrenador").classList.toggle("oculto", !ver);
   if (!ver) return;
+  pintarAyudas();
   pintarTema();
   pintarPlan();
   pintarRepaso();

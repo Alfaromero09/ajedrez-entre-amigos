@@ -884,6 +884,15 @@ body.enfoque .zona-tablero { gap: 6px; }
 .motor-chip { margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; vertical-align: middle; }
 .motor-chip.ok { background: rgba(95,191,90,0.16); color: #A9CB9A; }
 .motor-chip.mal { background: rgba(217,68,58,0.18); color: #F0A08A; }
+
+/* ---------- Encender y apagar ayudas ---------- */
+.ent-ayudas { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 8px 10px; border-radius: 12px; background: #1F150E; border: 1px solid var(--linea); }
+.ent-ayudas-titulo { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--suave); margin-right: 2px; }
+.ent-ayudas button { height: 26px; padding: 0 9px; border-radius: 999px; border: 1px solid rgba(233,220,195,0.18); background: transparent; color: var(--suave); font-size: 11px; font-weight: 600; text-decoration: line-through; opacity: 0.75; }
+.ent-ayudas button[aria-pressed="true"] { text-decoration: none; opacity: 1; border-color: rgba(95,191,90,0.55); background: rgba(95,191,90,0.14); color: #BDE5B5; }
+.ent-ayudas button:hover { transform: none; filter: brightness(1.1); }
+.ent-ayudas .ayudas-todas { text-decoration: none; opacity: 1; margin-left: auto; border-color: rgba(111,168,220,0.45); color: #CFE3F5; }
+.entrenador.sin-ayudas .ent-leyenda { display: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -1115,6 +1124,13 @@ body.enfoque .zona-tablero { gap: 6px; }
           <div id="ent-tarjeta" class="ent-tarjeta"></div>
           <div id="ent-amenaza" class="ent-amenaza oculto"></div>
           <div id="ent-notas" class="ent-notas oculto"></div>
+          <div class="ent-ayudas" role="group" aria-label="Ayudas del entrenador">
+            <span class="ent-ayudas-titulo">Ayudas</span>
+            <button type="button" data-ayuda="amenazas" aria-pressed="true">⚠️ Amenazas</button>
+            <button type="button" data-ayuda="notas" aria-pressed="true">📝 Notas</button>
+            <button type="button" data-ayuda="veredicto" aria-pressed="true">✅ Calificar mis jugadas</button>
+            <button type="button" class="ayudas-todas" id="ayudas-todas">🙈 Jugar sin ayudas</button>
+          </div>
           <div class="ent-botones">
             <button type="button" class="ent-btn" id="ent-pistas" aria-pressed="false">💡 Ver mejores jugadas</button>
             <button type="button" class="ent-btn" id="ent-deshacer">↶ Deshacer</button>
