@@ -1336,6 +1336,7 @@ async function abrirLocal(recien) {
 
 function ajustarVistaLocal(color, turno) {
   pintarEntrenador();
+  $("reiniciar-maquina").classList.remove("oculto");
   // Marca junto al nombre de la Máquina: si juega con Stockfish o en modo sencillo
   const lado = partida.blancas === MAQUINA ? (miColor() === "b" ? "arriba" : "abajo") : (miColor() === "w" ? "arriba" : "abajo");
   const nombre = $(lado)?.querySelector(".lado strong");
@@ -2324,6 +2325,7 @@ async function recargar(id) {
 
 async function abrirPartida(id) {
   if (id === MAQUINA) return abrirLocal();
+  $("reiniciar-maquina").classList.add("oculto");
   document.body.classList.remove("sin-reloj", "vs-maquina");
   $("entrenador").classList.add("oculto");
   mostrar("partida");
@@ -3618,6 +3620,19 @@ $("form-club").addEventListener("submit", async (e) => {
   const { data, error } = await sb.from("mensajes_privados").insert({ para: chatCon, texto }).select().single();
   if (error) { input.value = texto; return avisar("No se pudo enviar el mensaje."); }
   pintarPrivado(data);
+});
+
+// Reiniciar: la misma partida contra la Máquina, desde cero (mismo nivel, color, reloj, entrenador, lección y tema)
+$("reiniciar-maquina").addEventListener("click", () => {
+  if (!partida?.local) return;
+  if (partida.jugadas.length && !confirm("¿Empezar esta partida de nuevo desde cero?")) return;
+  const color = partida.blancas === yo ? "w" : "b";
+  cerrarFinal?.();
+  empezarLocal({
+    nivel: partida.nivel, color, min: partida.minutos || 0, didactico: !!partida.didactico,
+    modo: partida.leccion ? "leccion" : "libre", leccion: partida.leccion || null, tema: partida.tema || null,
+  });
+  avisar("🔄 Partida reiniciada.");
 });
 
 // ---------- Tablero a pantalla completa ----------

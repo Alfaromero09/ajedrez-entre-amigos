@@ -200,7 +200,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .mini-mesa li.juega { background: rgba(205,165,78,0.10); }
 .mini-mesa li.juega .nom { color: var(--texto); }
 .mini-mesa li.juega .nom::after { content: " ●"; color: var(--laton-claro); font-size: 9px; vertical-align: 2px; }
-.mini-mesa .mas { justify-content: center; color: var(--suave); font-size: 12px; }
+.mini-mesa li.mas { display: block; text-align: center; color: var(--suave); font-size: 12px; }
 .cara { margin-top: 6px; padding: 8px 4px 0; border-top: 1px solid var(--linea); display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--suave); }
 .cara strong { font-family: "Fraunces", serif; font-weight: 500; font-size: 18px; color: var(--texto); font-variant-numeric: tabular-nums; }
 body.enfoque .lateral-izq, body.enfoque .lateral-chat { display: none !important; }
@@ -916,6 +916,14 @@ body.enfoque .estilos-btn { display: grid; }
 body.enfoque .hud { display: none; }
 body.enfoque .barra-vista { display: none; }
 body.enfoque.ver-estilos .barra-vista { display: flex; position: fixed; z-index: 70; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(92vw, 760px); max-width: none !important; background: rgba(42,28,19,0.97); border: 1px solid rgba(227,199,126,0.4); box-shadow: 0 16px 40px rgba(10,6,3,0.6); }
+
+/* Reiniciar la partida contra la Máquina */
+.zona-tablero { position: relative; }
+.reiniciar-maquina { position: absolute; top: 4px; right: 0; z-index: 4; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(227,199,126,0.45); background: rgba(205,165,78,0.12); color: var(--laton-claro); font-size: 14px; font-weight: 600; }
+.reiniciar-maquina:hover { background: rgba(205,165,78,0.24); transform: none; }
+.reiniciar-maquina svg { width: 17px; height: 17px; }
+body.enfoque .reiniciar-maquina { height: 34px; padding: 0 12px; font-size: 13px; }
+@media (max-width: 900px) { .reiniciar-maquina { position: static; align-self: flex-end; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -1112,6 +1120,7 @@ body.enfoque.ver-estilos .barra-vista { display: flex; position: fixed; z-index:
         </div>
       </aside>
       <div class="zona-tablero">
+        <button type="button" id="reiniciar-maquina" class="reiniciar-maquina oculto" title="Empezar de nuevo esta partida contra la Máquina"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Reiniciar partida</button>
         <div class="jugador" id="arriba"></div>
         <div class="hud" id="hud" aria-live="polite"></div>
         <div class="escena"><div id="aviso-pausa" class="aviso-pausa oculto" role="status"></div><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div>
