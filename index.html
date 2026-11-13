@@ -779,7 +779,8 @@ body.sin-reloj .reloj-caja { visibility: hidden; }
 .analizando { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 4px; }
 .analizando i { width: 4px; height: 4px; border-radius: 50%; background: #9DC3E6; animation: pensar 1s ease-in-out infinite; }
 .analizando i:nth-child(2) { animation-delay: 0.15s; } .analizando i:nth-child(3) { animation-delay: 0.3s; }
-body.enfoque .lateral > #entrenador { display: flex !important; }
+body.enfoque .lateral > #entrenador:not(.oculto) { display: flex !important; }
+body.enfoque .lateral > .oculto { display: none !important; }
 body.enfoque .ent-leyenda { display: none; }
 
 /* ---------- Temas de práctica y repaso ---------- */
