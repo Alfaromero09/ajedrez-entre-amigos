@@ -252,8 +252,12 @@ body.enfoque .envoltura { max-width: none; padding: 8px 16px; }
 body.enfoque #partida { grid-template-columns: minmax(0, 1fr) 320px !important; gap: 16px; }
 @media (max-width: 760px) { body.enfoque #partida { grid-template-columns: 1fr !important; } }
 body.enfoque .zona-tablero { gap: 8px; }
-body.enfoque .escena { max-width: min(100%, calc(100vh - 300px)); padding: 26px 24px 20px; }
-body.enfoque .jugador, body.enfoque .hud, body.enfoque .barra-vista { max-width: min(100%, calc(100vh - 300px)); }
+/* En pantalla completa el tamaño lo calcula el código para llenar la altura disponible */
+body.enfoque .escena { max-width: var(--tam-enfoque, min(100%, calc(100vh - 300px))); padding: 20px 18px 16px; }
+body.enfoque .jugador, body.enfoque .hud, body.enfoque .barra-vista { max-width: var(--tam-enfoque, min(100%, calc(100vh - 300px))); }
+body.enfoque .jugador { min-height: 0; }
+body.enfoque .jugador .avatar { width: 30px; height: 30px; }
+body.enfoque .reloj { font-size: 22px; padding: 4px 12px; }
 body.enfoque .maximizar .icono-abrir { display: none; }
 body.enfoque .maximizar .icono-cerrar { display: inline; }
 .marco { background: #4A2F1C; padding: 22px; border-radius: 14px; transform-origin: 50% 100%; transform-style: preserve-3d; box-shadow: var(--sombra-2); transition: transform 200ms var(--resorte); }
@@ -905,6 +909,13 @@ body.enfoque .zona-tablero { gap: 6px; }
 .ent-ayudas button:hover { transform: none; filter: brightness(1.1); }
 .ent-ayudas .ayudas-todas { text-decoration: none; opacity: 1; margin-left: auto; border-color: rgba(111,168,220,0.45); color: #CFE3F5; }
 .entrenador.sin-ayudas .ent-leyenda { display: none; }
+
+/* Pantalla completa: más tablero. Los estilos se abren con 🎨 y flotan sobre el tablero */
+.estilos-btn { display: none; right: auto; left: 12px; font-size: 18px; }
+body.enfoque .estilos-btn { display: grid; }
+body.enfoque .hud { display: none; }
+body.enfoque .barra-vista { display: none; }
+body.enfoque.ver-estilos .barra-vista { display: flex; position: fixed; z-index: 70; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(92vw, 760px); max-width: none !important; background: rgba(42,28,19,0.97); border: 1px solid rgba(227,199,126,0.4); box-shadow: 0 16px 40px rgba(10,6,3,0.6); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -1104,6 +1115,7 @@ body.enfoque .zona-tablero { gap: 6px; }
         <div class="jugador" id="arriba"></div>
         <div class="hud" id="hud" aria-live="polite"></div>
         <div class="escena"><div id="aviso-pausa" class="aviso-pausa oculto" role="status"></div><div class="marco" id="marco"><div class="tablero" id="tablero"></div></div>
+          <button type="button" id="btn-estilos" class="maximizar estilos-btn" aria-label="Estilo del tablero" aria-expanded="false" title="Estilo del tablero">🎨</button>
           <button type="button" id="maximizar" class="maximizar" aria-label="Agrandar el tablero a pantalla completa" aria-pressed="false" title="Pantalla completa"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="icono-abrir" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="icono-cerrar" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
         </div>
         <div class="jugador" id="abajo"></div>

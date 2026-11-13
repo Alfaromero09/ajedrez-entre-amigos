@@ -3625,6 +3625,8 @@ function ponerEnfoque(activar) {
   document.body.classList.toggle("enfoque", activar);
   ubicarChat();
   ubicarPlan();
+  if (!activar) document.body.classList.remove("ver-estilos");
+  requestAnimationFrame(() => { ajustarEnfoque(); requestAnimationFrame(ajustarEnfoque); });
   const b = $("maximizar");
   b.setAttribute("aria-pressed", String(activar));
   b.setAttribute("aria-label", activar ? "Salir de pantalla completa" : "Agrandar el tablero a pantalla completa");
@@ -3645,7 +3647,40 @@ function aplicarAngulo() {
   $("marco").style.transform = `rotateX(${a}deg)`;
   document.querySelectorAll(".pieza").forEach((p) => (p.style.transform = `rotateX(${-a}deg)`));
 }
-$("angulo").addEventListener("input", aplicarAngulo);
+$("angulo").addEventListener("input", () => { aplicarAngulo(); ajustarEnfoque(); });
+
+// En pantalla completa, el tablero crece hasta llenar el alto de la pantalla (sin necesidad de bajar)
+function ajustarEnfoque() {
+  const raiz = document.documentElement;
+  if (!document.body.classList.contains("enfoque")) { raiz.style.removeProperty("--tam-enfoque"); return; }
+  const zona = document.querySelector(".zona-tablero"), escena = document.querySelector(".escena");
+  if (!zona || !escena) return;
+  const anchoCol = zona.clientWidth;
+  // Prueba con el ancho máximo de la columna y mide cuánto sobra o falta de alto
+  raiz.style.setProperty("--tam-enfoque", `${anchoCol}px`);
+  const alto = zona.getBoundingClientRect().height;
+  const disponible = window.innerHeight - 16;
+  const proporcion = escena.getBoundingClientRect().height / escena.getBoundingClientRect().width;
+  const resto = alto - escena.getBoundingClientRect().height;   // relojes, píldoras y barra de estilos
+  let tam = Math.max(320, Math.min(anchoCol, (disponible - resto) / proporcion));
+  raiz.style.setProperty("--tam-enfoque", `${Math.floor(tam)}px`);
+  // Segunda medición fina por si algo cambió de renglón al encoger
+  const sobra = window.innerHeight - 8 - zona.getBoundingClientRect().bottom;
+  if (sobra < 0) { tam = Math.max(320, tam + sobra / proporcion); raiz.style.setProperty("--tam-enfoque", `${Math.floor(tam)}px`); }
+}
+$("btn-estilos").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const abrir = !document.body.classList.contains("ver-estilos");
+  document.body.classList.toggle("ver-estilos", abrir);
+  $("btn-estilos").setAttribute("aria-expanded", String(abrir));
+});
+document.addEventListener("click", (e) => {
+  if (document.body.classList.contains("ver-estilos") && !e.target.closest(".barra-vista, #btn-estilos")) {
+    document.body.classList.remove("ver-estilos");
+    $("btn-estilos").setAttribute("aria-expanded", "false");
+  }
+});
+window.addEventListener("resize", () => ajustarEnfoque());
 
 // ---------- Ajustes de cuenta ----------
 let fotoNueva = undefined;   // Blob nuevo, null para quitarla, undefined si no cambia
